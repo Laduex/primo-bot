@@ -1,6 +1,5 @@
 package dev.saseq.primobot.commands;
 
-import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
@@ -14,8 +13,7 @@ public final class PrimoCommands {
     public static final String VAT_BASIS_OPTION = "basis";
 
     public static final String ORDER_FORUM_OPTION = "forum";
-    public static final String ORDER_CUSTOMER_NAME_OPTION = "customer_name";
-    public static final String ORDER_MESSAGE_OPTION = "message";
+    public static final String ORDER_CUSTOMER_OPTION = "customer";
 
     private PrimoCommands() {
     }
@@ -33,9 +31,9 @@ public final class PrimoCommands {
     public static CommandData buildOrderSlashCommand() {
         return Commands.slash(COMMAND_ORDER, "Create a forum order post")
                 .addOptions(
-                        new OptionData(OptionType.CHANNEL, ORDER_FORUM_OPTION, "Forum channel to post in", true)
-                                .setChannelTypes(ChannelType.FORUM),
-                        new OptionData(OptionType.STRING, ORDER_CUSTOMER_NAME_OPTION, "Customer name for the order title", true)
+                        new OptionData(OptionType.STRING, ORDER_FORUM_OPTION, "Order From?", true)
+                                .setAutoComplete(true),
+                        new OptionData(OptionType.STRING, ORDER_CUSTOMER_OPTION, "Customer name", true)
                 );
     }
 }
