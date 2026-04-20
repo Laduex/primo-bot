@@ -5,9 +5,12 @@ import dev.saseq.primobot.commands.PrimoSlashCommandListener;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.Set;
 
 @Configuration
 public class PrimoBotConfig {
@@ -27,32 +30,44 @@ public class PrimoBotConfig {
 
         var vatCommand = PrimoCommands.buildVatSlashCommand();
         var orderCommand = PrimoCommands.buildOrderSlashCommand();
+        syncGlobalVatCommand(jda, vatCommand);
+
         if (defaultGuildId != null && !defaultGuildId.isBlank()) {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
                 syncGuildCommands(guild, vatCommand, orderCommand);
+                deleteGlobalCommandsByName(jda, Set.of(PrimoCommands.COMMAND_ORDER, "primo"));
                 return jda;
             }
         }
 
-        jda.upsertCommand(vatCommand).queue();
         jda.upsertCommand(orderCommand).queue();
-        jda.retrieveCommands().queue(commands ->
-                commands.stream()
-                        .filter(command -> "primo".equals(command.getName()))
-                        .forEach(command -> command.delete().queue())
-        );
+        deleteGlobalCommandsByName(jda, Set.of("primo"));
         return jda;
     }
 
-    private void syncGuildCommands(Guild guild,
-                                   net.dv8tion.jda.api.interactions.commands.build.CommandData vatCommand,
-                                   net.dv8tion.jda.api.interactions.commands.build.CommandData orderCommand) {
+    private void syncGlobalVatCommand(JDA jda, CommandData vatCommand) {
+        jda.upsertCommand(vatCommand).queue();
+    }
+
+    private void syncGuildCommands(Guild guild, CommandData vatCommand, CommandData orderCommand) {
         guild.upsertCommand(vatCommand).queue();
         guild.upsertCommand(orderCommand).queue();
+        deleteGuildCommandsByName(guild, Set.of("primo"));
+    }
+
+    private void deleteGlobalCommandsByName(JDA jda, Set<String> commandNames) {
+        jda.retrieveCommands().queue(commands ->
+                commands.stream()
+                        .filter(command -> commandNames.contains(command.getName()))
+                        .forEach(command -> command.delete().queue())
+        );
+    }
+
+    private void deleteGuildCommandsByName(Guild guild, Set<String> commandNames) {
         guild.retrieveCommands().queue(commands ->
                 commands.stream()
-                        .filter(command -> "primo".equals(command.getName()))
+                        .filter(command -> commandNames.contains(command.getName()))
                         .forEach(command -> command.delete().queue())
         );
     }

@@ -5,9 +5,9 @@ Standalone Discord bot service that owns `/order` and `/vat` slash commands.
 ## Features
 
 - `/order` flow: `Order From?` (forums under `Orders` category only) + `Customer name`, then send the next normal channel message as the order body
-- `/vat` PH standard VAT calculator (12%)
+- `/vat` PH standard VAT calculator (12%), available in server channels and bot DMs
 - Optional forum auto-mention: ping configured roles whenever a user creates a new post in selected forums
-- Guild-specific command registration support via `DISCORD_GUILD_ID`
+- Guild-specific command registration support for `/order` via `DISCORD_GUILD_ID` (while `/vat` stays available in DMs)
 - Health endpoint on port `8086`
 
 ## Requirements
