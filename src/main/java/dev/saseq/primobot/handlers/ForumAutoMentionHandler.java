@@ -22,7 +22,8 @@ import java.util.stream.Collectors;
 public class ForumAutoMentionHandler {
     private static final Logger LOG = LoggerFactory.getLogger(ForumAutoMentionHandler.class);
     private static final Pattern SNOWFLAKE_PATTERN = Pattern.compile("\\d+");
-    private static final String FOLLOW_HINT = "New forum post. Click Follow on this post if you want updates.";
+    private static final String ORDERS_CATEGORY_NAME = "Orders";
+    private static final String FOLLOW_HINT = "New Order! Follow post for updates!";
 
     private final Map<String, List<String>> forumRoleTargets;
     private final Set<String> processedThreadIds = ConcurrentHashMap.newKeySet();
@@ -50,6 +51,9 @@ public class ForumAutoMentionHandler {
         }
 
         if (!(thread.getParentChannel() instanceof ForumChannel forumChannel)) {
+            return;
+        }
+        if (!isOrdersCategoryForum(forumChannel)) {
             return;
         }
 
@@ -129,6 +133,12 @@ public class ForumAutoMentionHandler {
             return Map.of();
         }
         return Collections.unmodifiableMap(parsedTargets);
+    }
+
+    private boolean isOrdersCategoryForum(ForumChannel forumChannel) {
+        return forumChannel != null
+                && forumChannel.getParentCategory() != null
+                && ORDERS_CATEGORY_NAME.equalsIgnoreCase(forumChannel.getParentCategory().getName());
     }
 
     private boolean isSnowflake(String value) {
