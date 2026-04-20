@@ -1,0 +1,18 @@
+services:
+  primo-bot:
+    container_name: primo-bot
+    build:
+      context: .
+    image: saseq/primo-bot:latest
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8086/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
