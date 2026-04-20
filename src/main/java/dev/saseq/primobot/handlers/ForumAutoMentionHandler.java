@@ -23,7 +23,7 @@ public class ForumAutoMentionHandler {
     private static final Logger LOG = LoggerFactory.getLogger(ForumAutoMentionHandler.class);
     private static final Pattern SNOWFLAKE_PATTERN = Pattern.compile("\\d+");
     private static final String ORDERS_CATEGORY_NAME = "Orders";
-    private static final String FOLLOW_HINT = "New Order! Follow post for updates!";
+    private static final String FOLLOW_HINT = "New Order! Acknowledge and follow the post for updates.";
 
     private final Map<String, List<String>> forumRoleTargets;
     private final Set<String> processedThreadIds = ConcurrentHashMap.newKeySet();
