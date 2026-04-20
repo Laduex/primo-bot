@@ -1,7 +1,9 @@
 package dev.saseq.primobot.commands;
 
+import dev.saseq.primobot.handlers.ForumAutoMentionHandler;
 import dev.saseq.primobot.handlers.OrderCommandHandler;
 import dev.saseq.primobot.handlers.VatCommandHandler;
+import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -12,11 +14,14 @@ import org.springframework.stereotype.Component;
 public class PrimoSlashCommandListener extends ListenerAdapter {
     private final VatCommandHandler vatCommandHandler;
     private final OrderCommandHandler orderCommandHandler;
+    private final ForumAutoMentionHandler forumAutoMentionHandler;
 
     public PrimoSlashCommandListener(VatCommandHandler vatCommandHandler,
-                                     OrderCommandHandler orderCommandHandler) {
+                                     OrderCommandHandler orderCommandHandler,
+                                     ForumAutoMentionHandler forumAutoMentionHandler) {
         this.vatCommandHandler = vatCommandHandler;
         this.orderCommandHandler = orderCommandHandler;
+        this.forumAutoMentionHandler = forumAutoMentionHandler;
     }
 
     @Override
@@ -44,5 +49,10 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
             return;
         }
         orderCommandHandler.handleForumAutocomplete(event);
+    }
+
+    @Override
+    public void onChannelCreate(ChannelCreateEvent event) {
+        forumAutoMentionHandler.handleChannelCreate(event);
     }
 }

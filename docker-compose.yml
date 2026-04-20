@@ -10,6 +10,7 @@ services:
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      FORUM_AUTO_MENTION_TARGETS: ${FORUM_AUTO_MENTION_TARGETS:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8086/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 30s
