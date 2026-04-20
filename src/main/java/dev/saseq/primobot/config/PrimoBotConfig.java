@@ -30,17 +30,16 @@ public class PrimoBotConfig {
 
         var vatCommand = PrimoCommands.buildVatSlashCommand();
         var orderCommand = PrimoCommands.buildOrderSlashCommand();
-        var recipeCommand = PrimoCommands.buildRecipeSlashCommand();
-        var supplierCommand = PrimoCommands.buildSupplierSlashCommand();
         syncGlobalVatCommand(jda, vatCommand);
-        syncGlobalAdminCommands(jda, recipeCommand, supplierCommand);
 
         if (defaultGuildId != null && !defaultGuildId.isBlank()) {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
-                syncGuildCommands(guild, vatCommand, orderCommand, recipeCommand, supplierCommand);
+                syncGuildCommands(guild, vatCommand, orderCommand);
                 deleteGlobalCommandsByName(jda, Set.of(
                         PrimoCommands.COMMAND_ORDER,
+                        "recipe",
+                        "supplier",
                         "primo"
                 ));
                 return jda;
@@ -48,7 +47,7 @@ public class PrimoBotConfig {
         }
 
         jda.upsertCommand(orderCommand).queue();
-        deleteGlobalCommandsByName(jda, Set.of("primo"));
+        deleteGlobalCommandsByName(jda, Set.of("recipe", "supplier", "primo"));
         return jda;
     }
 
@@ -56,21 +55,12 @@ public class PrimoBotConfig {
         jda.upsertCommand(vatCommand).queue();
     }
 
-    private void syncGlobalAdminCommands(JDA jda, CommandData recipeCommand, CommandData supplierCommand) {
-        jda.upsertCommand(recipeCommand).queue();
-        jda.upsertCommand(supplierCommand).queue();
-    }
-
     private void syncGuildCommands(Guild guild,
                                    CommandData vatCommand,
-                                   CommandData orderCommand,
-                                   CommandData recipeCommand,
-                                   CommandData supplierCommand) {
+                                   CommandData orderCommand) {
         guild.upsertCommand(vatCommand).queue();
         guild.upsertCommand(orderCommand).queue();
-        guild.upsertCommand(recipeCommand).queue();
-        guild.upsertCommand(supplierCommand).queue();
-        deleteGuildCommandsByName(guild, Set.of("primo"));
+        deleteGuildCommandsByName(guild, Set.of("recipe", "supplier", "primo"));
     }
 
     private void deleteGlobalCommandsByName(JDA jda, Set<String> commandNames) {

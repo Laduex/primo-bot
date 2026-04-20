@@ -2,8 +2,6 @@ package dev.saseq.primobot.commands;
 
 import dev.saseq.primobot.handlers.ForumAutoMentionHandler;
 import dev.saseq.primobot.handlers.OrderCommandHandler;
-import dev.saseq.primobot.handlers.RecipeCommandHandler;
-import dev.saseq.primobot.handlers.SupplierCommandHandler;
 import dev.saseq.primobot.handlers.VatCommandHandler;
 import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
@@ -16,19 +14,13 @@ import org.springframework.stereotype.Component;
 public class PrimoSlashCommandListener extends ListenerAdapter {
     private final VatCommandHandler vatCommandHandler;
     private final OrderCommandHandler orderCommandHandler;
-    private final RecipeCommandHandler recipeCommandHandler;
-    private final SupplierCommandHandler supplierCommandHandler;
     private final ForumAutoMentionHandler forumAutoMentionHandler;
 
     public PrimoSlashCommandListener(VatCommandHandler vatCommandHandler,
                                      OrderCommandHandler orderCommandHandler,
-                                     RecipeCommandHandler recipeCommandHandler,
-                                     SupplierCommandHandler supplierCommandHandler,
                                      ForumAutoMentionHandler forumAutoMentionHandler) {
         this.vatCommandHandler = vatCommandHandler;
         this.orderCommandHandler = orderCommandHandler;
-        this.recipeCommandHandler = recipeCommandHandler;
-        this.supplierCommandHandler = supplierCommandHandler;
         this.forumAutoMentionHandler = forumAutoMentionHandler;
     }
 
@@ -40,14 +32,6 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
         }
         if (PrimoCommands.COMMAND_ORDER.equals(event.getName())) {
             orderCommandHandler.handle(event);
-            return;
-        }
-        if (PrimoCommands.COMMAND_RECIPE.equals(event.getName())) {
-            recipeCommandHandler.handle(event);
-            return;
-        }
-        if (PrimoCommands.COMMAND_SUPPLIER.equals(event.getName())) {
-            supplierCommandHandler.handle(event);
         }
     }
 
@@ -58,13 +42,10 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
 
     @Override
     public void onCommandAutoCompleteInteraction(CommandAutoCompleteInteractionEvent event) {
-        if (!PrimoCommands.COMMAND_ORDER.equals(event.getName())) {
-            return;
+        if (PrimoCommands.COMMAND_ORDER.equals(event.getName())
+                && PrimoCommands.ORDER_FORUM_OPTION.equals(event.getFocusedOption().getName())) {
+            orderCommandHandler.handleForumAutocomplete(event);
         }
-        if (!PrimoCommands.ORDER_FORUM_OPTION.equals(event.getFocusedOption().getName())) {
-            return;
-        }
-        orderCommandHandler.handleForumAutocomplete(event);
     }
 
     @Override
