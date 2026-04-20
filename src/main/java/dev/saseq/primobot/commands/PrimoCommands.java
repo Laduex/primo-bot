@@ -8,12 +8,16 @@ import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 public final class PrimoCommands {
     public static final String COMMAND_VAT = "vat";
     public static final String COMMAND_ORDER = "order";
+    public static final String COMMAND_RECIPE = "recipe";
+    public static final String COMMAND_SUPPLIER = "supplier";
 
     public static final String VAT_AMOUNT_OPTION = "amount";
     public static final String VAT_BASIS_OPTION = "basis";
 
     public static final String ORDER_FORUM_OPTION = "forum";
     public static final String ORDER_CUSTOMER_OPTION = "customer";
+    public static final String RECIPE_QUERY_OPTION = "query";
+    public static final String SUPPLIER_QUERY_OPTION = "query";
 
     private PrimoCommands() {
     }
@@ -34,6 +38,20 @@ public final class PrimoCommands {
                         new OptionData(OptionType.STRING, ORDER_FORUM_OPTION, "Order From?", true)
                                 .setAutoComplete(true),
                         new OptionData(OptionType.STRING, ORDER_CUSTOMER_OPTION, "Customer name", true)
+                );
+    }
+
+    public static CommandData buildRecipeSlashCommand() {
+        return Commands.slash(COMMAND_RECIPE, "List recipes or search recipes and variation details")
+                .addOptions(
+                        new OptionData(OptionType.STRING, RECIPE_QUERY_OPTION, "Recipe or variation search (optional)", false)
+                );
+    }
+
+    public static CommandData buildSupplierSlashCommand() {
+        return Commands.slash(COMMAND_SUPPLIER, "List suppliers with full profile details")
+                .addOptions(
+                        new OptionData(OptionType.STRING, SUPPLIER_QUERY_OPTION, "Supplier search (optional)", false)
                 );
     }
 }

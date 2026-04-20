@@ -2,6 +2,8 @@ package dev.saseq.primobot.commands;
 
 import dev.saseq.primobot.handlers.ForumAutoMentionHandler;
 import dev.saseq.primobot.handlers.OrderCommandHandler;
+import dev.saseq.primobot.handlers.RecipeCommandHandler;
+import dev.saseq.primobot.handlers.SupplierCommandHandler;
 import dev.saseq.primobot.handlers.VatCommandHandler;
 import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
@@ -14,13 +16,19 @@ import org.springframework.stereotype.Component;
 public class PrimoSlashCommandListener extends ListenerAdapter {
     private final VatCommandHandler vatCommandHandler;
     private final OrderCommandHandler orderCommandHandler;
+    private final RecipeCommandHandler recipeCommandHandler;
+    private final SupplierCommandHandler supplierCommandHandler;
     private final ForumAutoMentionHandler forumAutoMentionHandler;
 
     public PrimoSlashCommandListener(VatCommandHandler vatCommandHandler,
                                      OrderCommandHandler orderCommandHandler,
+                                     RecipeCommandHandler recipeCommandHandler,
+                                     SupplierCommandHandler supplierCommandHandler,
                                      ForumAutoMentionHandler forumAutoMentionHandler) {
         this.vatCommandHandler = vatCommandHandler;
         this.orderCommandHandler = orderCommandHandler;
+        this.recipeCommandHandler = recipeCommandHandler;
+        this.supplierCommandHandler = supplierCommandHandler;
         this.forumAutoMentionHandler = forumAutoMentionHandler;
     }
 
@@ -32,6 +40,14 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
         }
         if (PrimoCommands.COMMAND_ORDER.equals(event.getName())) {
             orderCommandHandler.handle(event);
+            return;
+        }
+        if (PrimoCommands.COMMAND_RECIPE.equals(event.getName())) {
+            recipeCommandHandler.handle(event);
+            return;
+        }
+        if (PrimoCommands.COMMAND_SUPPLIER.equals(event.getName())) {
+            supplierCommandHandler.handle(event);
         }
     }
 
