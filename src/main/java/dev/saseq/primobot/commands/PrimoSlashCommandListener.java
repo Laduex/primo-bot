@@ -2,7 +2,7 @@ package dev.saseq.primobot.commands;
 
 import dev.saseq.primobot.handlers.OrderCommandHandler;
 import dev.saseq.primobot.handlers.VatCommandHandler;
-import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.springframework.stereotype.Component;
@@ -30,13 +30,7 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
     }
 
     @Override
-    public void onCommandAutoCompleteInteraction(CommandAutoCompleteInteractionEvent event) {
-        if (!PrimoCommands.COMMAND_ORDER.equals(event.getName())) {
-            return;
-        }
-        if (!PrimoCommands.ORDER_TAGS_OPTION.equals(event.getFocusedOption().getName())) {
-            return;
-        }
-        orderCommandHandler.handleAutocomplete(event);
+    public void onModalInteraction(ModalInteractionEvent event) {
+        orderCommandHandler.handleModalSubmit(event);
     }
 }

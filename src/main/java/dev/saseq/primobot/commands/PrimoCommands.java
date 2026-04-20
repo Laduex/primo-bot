@@ -14,7 +14,7 @@ public final class PrimoCommands {
     public static final String VAT_BASIS_OPTION = "basis";
 
     public static final String ORDER_FORUM_OPTION = "forum";
-    public static final String ORDER_TAGS_OPTION = "tags";
+    public static final String ORDER_CUSTOMER_NAME_OPTION = "customer_name";
     public static final String ORDER_MESSAGE_OPTION = "message";
 
     private PrimoCommands() {
@@ -31,13 +31,11 @@ public final class PrimoCommands {
     }
 
     public static CommandData buildOrderSlashCommand() {
-        return Commands.slash(COMMAND_ORDER, "Create a forum order post in one command")
+        return Commands.slash(COMMAND_ORDER, "Create a forum order post")
                 .addOptions(
                         new OptionData(OptionType.CHANNEL, ORDER_FORUM_OPTION, "Forum channel to post in", true)
                                 .setChannelTypes(ChannelType.FORUM),
-                        new OptionData(OptionType.STRING, ORDER_TAGS_OPTION, "Choose tags (comma-separated; autocomplete supported)", true)
-                                .setAutoComplete(true),
-                        new OptionData(OptionType.STRING, ORDER_MESSAGE_OPTION, "Order body content", true)
+                        new OptionData(OptionType.STRING, ORDER_CUSTOMER_NAME_OPTION, "Customer name for the order title", true)
                 );
     }
 }
