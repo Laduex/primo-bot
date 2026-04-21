@@ -3,7 +3,6 @@ package dev.saseq.primobot.handlers;
 import dev.saseq.primobot.reminders.OrdersReminderConfig;
 import dev.saseq.primobot.reminders.OrdersReminderConfigStore;
 import dev.saseq.primobot.reminders.OrdersReminderRoute;
-import dev.saseq.primobot.reminders.OrdersReminderSchedulerService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
@@ -26,12 +25,9 @@ public class OrdersReminderCommandHandler {
     private static final String ORDERS_CATEGORY_NAME = "Orders";
 
     private final OrdersReminderConfigStore configStore;
-    private final OrdersReminderSchedulerService schedulerService;
 
-    public OrdersReminderCommandHandler(OrdersReminderConfigStore configStore,
-                                        OrdersReminderSchedulerService schedulerService) {
+    public OrdersReminderCommandHandler(OrdersReminderConfigStore configStore) {
         this.configStore = configStore;
-        this.schedulerService = schedulerService;
     }
 
     public void handle(SlashCommandInteractionEvent event) {
@@ -201,7 +197,7 @@ public class OrdersReminderCommandHandler {
         }
 
         Member selfMember = event.getGuild().getSelfMember();
-        if (!schedulerService.canBotMentionRole(selfMember, target, role)) {
+        if (!canBotMentionRole(selfMember, target, role)) {
             event.reply("The bot cannot mention that role in the target channel. Make the role mentionable or grant Mention Everyone permission.")
                     .setEphemeral(true)
                     .queue();
@@ -285,6 +281,13 @@ public class OrdersReminderCommandHandler {
         return forum != null
                 && forum.getParentCategory() != null
                 && ORDERS_CATEGORY_NAME.equalsIgnoreCase(forum.getParentCategory().getName());
+    }
+
+    private boolean canBotMentionRole(Member selfMember, TextChannel targetChannel, Role role) {
+        if (selfMember == null || targetChannel == null || role == null) {
+            return false;
+        }
+        return role.isMentionable() || selfMember.hasPermission(targetChannel, Permission.MESSAGE_MENTION_EVERYONE);
     }
 
     private boolean isValidTimezone(String timezone) {
