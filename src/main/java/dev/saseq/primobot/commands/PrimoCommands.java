@@ -12,6 +12,7 @@ import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 public final class PrimoCommands {
     public static final String COMMAND_VAT = "vat";
     public static final String COMMAND_ORDER = "order";
+    public static final String COMMAND_ORDER_REMIND = "order-remind";
     public static final String COMMAND_COMPLETED = "completed";
     public static final String COMMAND_ORDERS_REMINDER = "orders-reminder";
 
@@ -20,6 +21,7 @@ public final class PrimoCommands {
 
     public static final String ORDER_FORUM_OPTION = "forum";
     public static final String ORDER_CUSTOMER_OPTION = "customer";
+    public static final String ORDER_REMIND_FORUM_OPTION = "forum";
 
     private PrimoCommands() {
     }
@@ -45,6 +47,15 @@ public final class PrimoCommands {
 
     public static CommandData buildCompletedSlashCommand() {
         return Commands.slash(COMMAND_COMPLETED, "Mark this forum post as completed and close it");
+    }
+
+    public static CommandData buildOrderRemindSlashCommand() {
+        return Commands.slash(COMMAND_ORDER_REMIND, "Send an orders reminder now for a selected forum")
+                .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER))
+                .addOptions(
+                        new OptionData(OptionType.CHANNEL, ORDER_REMIND_FORUM_OPTION, "Order forum channel", true)
+                                .setChannelTypes(ChannelType.FORUM)
+                );
     }
 
     public static CommandData buildOrdersReminderSlashCommand() {

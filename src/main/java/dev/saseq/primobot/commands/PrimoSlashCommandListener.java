@@ -42,6 +42,10 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
             orderCommandHandler.handle(event);
             return;
         }
+        if (PrimoCommands.COMMAND_ORDER_REMIND.equals(event.getName())) {
+            ordersReminderCommandHandler.handleManualReminder(event);
+            return;
+        }
         if (PrimoCommands.COMMAND_COMPLETED.equals(event.getName())) {
             completedCommandHandler.handle(event);
             return;

@@ -30,16 +30,18 @@ public class PrimoBotConfig {
 
         var vatCommand = PrimoCommands.buildVatSlashCommand();
         var orderCommand = PrimoCommands.buildOrderSlashCommand();
+        var orderRemindCommand = PrimoCommands.buildOrderRemindSlashCommand();
         var completedCommand = PrimoCommands.buildCompletedSlashCommand();
         var ordersReminderCommand = PrimoCommands.buildOrdersReminderSlashCommand();
 
         if (defaultGuildId != null && !defaultGuildId.isBlank()) {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
-                syncGuildCommands(guild, vatCommand, orderCommand, completedCommand, ordersReminderCommand);
+                syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand);
                 deleteGlobalCommandsByName(jda, Set.of(
                         PrimoCommands.COMMAND_VAT,
                         PrimoCommands.COMMAND_ORDER,
+                        PrimoCommands.COMMAND_ORDER_REMIND,
                         PrimoCommands.COMMAND_COMPLETED,
                         PrimoCommands.COMMAND_ORDERS_REMINDER,
                         "recipe",
@@ -52,6 +54,7 @@ public class PrimoBotConfig {
 
         syncGlobalVatCommand(jda, vatCommand);
         jda.upsertCommand(orderCommand).queue();
+        jda.upsertCommand(orderRemindCommand).queue();
         jda.upsertCommand(completedCommand).queue();
         jda.upsertCommand(ordersReminderCommand).queue();
         deleteGlobalCommandsByName(jda, Set.of("recipe", "supplier", "primo"));
@@ -65,10 +68,12 @@ public class PrimoBotConfig {
     private void syncGuildCommands(Guild guild,
                                    CommandData vatCommand,
                                    CommandData orderCommand,
+                                   CommandData orderRemindCommand,
                                    CommandData completedCommand,
                                    CommandData ordersReminderCommand) {
         guild.upsertCommand(vatCommand).queue();
         guild.upsertCommand(orderCommand).queue();
+        guild.upsertCommand(orderRemindCommand).queue();
         guild.upsertCommand(completedCommand).queue();
         guild.upsertCommand(ordersReminderCommand).queue();
         deleteGuildCommandsByName(guild, Set.of("recipe", "supplier", "primo"));

@@ -9,6 +9,7 @@ Standalone Discord bot service for Primo operations slash commands.
 - `/vat` PH standard VAT calculator (12%), available in server channels and bot DMs
 - Optional forum auto-mention: ping configured roles whenever a user creates a new post in selected forums
 - `/orders-reminder` admin command for daily open-order reminders
+- `/order-remind` admin command to manually send a reminder now for one configured forum route
 - Daily branch reminders for unarchived order threads with friendly greeting and wiki-style links
 - Guild-specific command registration support via `DISCORD_GUILD_ID`
 - Health endpoint on port `8086`
@@ -58,6 +59,14 @@ Admin-only command (Manage Server permission required).
 - `set-route forum:<forum-channel> target:<text-channel> role:<role>`
 - `remove-route forum:<forum-channel>`
 - `set-copy tone:<casual|formal> signature:<text>`
+
+## `/order-remind` command
+
+Admin-only command (Manage Server permission required).
+
+- `forum:<forum-channel>` sends the reminder immediately for that configured forum route
+- Uses the same copy/greeting settings from `/orders-reminder`
+- Marks that route as already sent for the day to prevent duplicate scheduled sends
 
 Reminder behavior:
 

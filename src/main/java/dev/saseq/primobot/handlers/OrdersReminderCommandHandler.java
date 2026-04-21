@@ -1,14 +1,19 @@
 package dev.saseq.primobot.handlers;
 
+import dev.saseq.primobot.commands.PrimoCommands;
 import dev.saseq.primobot.reminders.OrdersReminderConfig;
 import dev.saseq.primobot.reminders.OrdersReminderConfigStore;
+import dev.saseq.primobot.reminders.OrdersReminderMessageBuilder;
 import dev.saseq.primobot.reminders.OrdersReminderRoute;
+import dev.saseq.primobot.util.DiscordMessageUtils;
 import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.concrete.ForumChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -16,6 +21,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -23,11 +29,16 @@ import java.util.Locale;
 @Component
 public class OrdersReminderCommandHandler {
     private static final String ORDERS_CATEGORY_NAME = "Orders";
+    private static final int DISCORD_MESSAGE_MAX_LENGTH = 2000;
+    private static final String FALLBACK_TIMEZONE = "Asia/Manila";
 
     private final OrdersReminderConfigStore configStore;
+    private final OrdersReminderMessageBuilder messageBuilder;
 
-    public OrdersReminderCommandHandler(OrdersReminderConfigStore configStore) {
+    public OrdersReminderCommandHandler(OrdersReminderConfigStore configStore,
+                                        OrdersReminderMessageBuilder messageBuilder) {
         this.configStore = configStore;
+        this.messageBuilder = messageBuilder;
     }
 
     public void handle(SlashCommandInteractionEvent event) {
@@ -61,6 +72,83 @@ public class OrdersReminderCommandHandler {
             case "remove-route" -> handleRemoveRoute(event);
             case "set-copy" -> handleSetCopy(event);
             default -> event.reply("Unknown subcommand.").setEphemeral(true).queue();
+        }
+    }
+
+    public void handleManualReminder(SlashCommandInteractionEvent event) {
+        if (event.getGuild() == null || event.getMember() == null) {
+            event.reply("This command can only be used inside a Discord server.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if (!hasManageServer(event.getMember())) {
+            event.reply("You need Manage Server permission to use `/order-remind`.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        OptionMapping forumOption = event.getOption(PrimoCommands.ORDER_REMIND_FORUM_OPTION);
+        if (forumOption == null || forumOption.getType() != OptionType.CHANNEL
+                || forumOption.getAsChannel().getType() != ChannelType.FORUM) {
+            event.reply("`forum` must be a forum channel.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        ForumChannel selectedForum = forumOption.getAsChannel().asForumChannel();
+        if (!isOrdersCategoryForum(selectedForum)) {
+            event.reply("Forum must be under the `Orders` category.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        OrdersReminderConfig config = configStore.getSnapshot();
+        OrdersReminderRoute route = config.getRoutes().stream()
+                .filter(existing -> selectedForum.getId().equals(existing.getForumId()))
+                .findFirst()
+                .orElse(null);
+
+        if (route == null) {
+            event.reply("No route is configured for `%s`. Run `/orders-reminder set-route` first."
+                            .formatted(selectedForum.getName()))
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        ManualDispatchResult result = dispatchManualReminder(event.getGuild(), route, config);
+        switch (result.status()) {
+            case SENT -> event.reply("Manual reminder sent for `%s` to <#%s>."
+                            .formatted(result.forumName(), result.targetChannelId()))
+                    .setEphemeral(true)
+                    .queue();
+            case NO_OPEN_ORDERS -> event.reply("No open orders found in `%s`, so nothing was sent."
+                            .formatted(result.forumName()))
+                    .setEphemeral(true)
+                    .queue();
+            case FORUM_NOT_FOUND -> event.reply("Could not find forum `<#%s>`. Update the route with `/orders-reminder set-route`."
+                            .formatted(route.getForumId()))
+                    .setEphemeral(true)
+                    .queue();
+            case TARGET_NOT_FOUND -> event.reply("Could not find target channel `<#%s>`. Update the route with `/orders-reminder set-route`."
+                            .formatted(route.getTargetTextChannelId()))
+                    .setEphemeral(true)
+                    .queue();
+            case ROLE_NOT_FOUND -> event.reply("Could not find role `<@&%s>`. Update the route with `/orders-reminder set-route`."
+                            .formatted(route.getMentionRoleId()))
+                    .setEphemeral(true)
+                    .queue();
+            case ROLE_CANNOT_BE_MENTIONED -> event.reply("The bot cannot mention that role in the target channel. Make the role mentionable or grant Mention Everyone permission.")
+                    .setEphemeral(true)
+                    .queue();
+            case SEND_FAILED -> event.reply("Failed to send reminder: " + result.errorMessage())
+                    .setEphemeral(true)
+                    .queue();
         }
     }
 
@@ -273,6 +361,62 @@ public class OrdersReminderCommandHandler {
                 .queue();
     }
 
+    private ManualDispatchResult dispatchManualReminder(Guild guild,
+                                                        OrdersReminderRoute route,
+                                                        OrdersReminderConfig config) {
+        ForumChannel forum = guild.getForumChannelById(route.getForumId());
+        if (forum == null) {
+            return ManualDispatchResult.forStatus(ManualDispatchStatus.FORUM_NOT_FOUND);
+        }
+
+        TextChannel target = guild.getTextChannelById(route.getTargetTextChannelId());
+        if (target == null) {
+            return ManualDispatchResult.forStatus(ManualDispatchStatus.TARGET_NOT_FOUND);
+        }
+
+        Role role = guild.getRoleById(route.getMentionRoleId());
+        if (role == null) {
+            return ManualDispatchResult.forStatus(ManualDispatchStatus.ROLE_NOT_FOUND);
+        }
+
+        Member selfMember = guild.getSelfMember();
+        if (!canBotMentionRole(selfMember, target, role)) {
+            return ManualDispatchResult.forStatus(ManualDispatchStatus.ROLE_CANNOT_BE_MENTIONED);
+        }
+
+        List<ThreadChannel> openThreads = new ArrayList<>(forum.getThreadChannels().stream()
+                .filter(thread -> !thread.isArchived())
+                .sorted(Comparator.comparing(ThreadChannel::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList());
+        if (openThreads.isEmpty()) {
+            return ManualDispatchResult.forStatus(ManualDispatchStatus.NO_OPEN_ORDERS, forum.getName(), target.getId(), null);
+        }
+
+        ZoneId zoneId = resolveZoneId(config.getTimezone());
+        ZonedDateTime now = ZonedDateTime.now(zoneId);
+        String greeting = messageBuilder.resolveGreeting(now.toLocalTime());
+        String content = messageBuilder.buildReminderMessage(
+                route.getMentionRoleId(),
+                greeting,
+                forum.getName(),
+                guild.getId(),
+                openThreads,
+                config.getSignature(),
+                config.getMessageTone());
+
+        try {
+            for (String chunk : DiscordMessageUtils.chunkMessage(content, DISCORD_MESSAGE_MAX_LENGTH)) {
+                target.sendMessage(chunk).complete();
+            }
+        } catch (Exception ex) {
+            return ManualDispatchResult.forStatus(ManualDispatchStatus.SEND_FAILED, forum.getName(), target.getId(), ex.getMessage());
+        }
+
+        config.getLastRunDateByRoute().put(route.getForumId(), now.toLocalDate().toString());
+        configStore.replaceAndPersist(config);
+        return ManualDispatchResult.forStatus(ManualDispatchStatus.SENT, forum.getName(), target.getId(), null);
+    }
+
     private boolean hasManageServer(Member member) {
         return member != null && member.hasPermission(Permission.MANAGE_SERVER);
     }
@@ -310,6 +454,45 @@ public class OrdersReminderCommandHandler {
             return run.toString();
         } catch (Exception ignored) {
             return "Invalid timezone";
+        }
+    }
+
+    private ZoneId resolveZoneId(String timezone) {
+        try {
+            return ZoneId.of(timezone);
+        } catch (Exception ignored) {
+            return ZoneId.of(FALLBACK_TIMEZONE);
+        }
+    }
+
+    private enum ManualDispatchStatus {
+        SENT,
+        NO_OPEN_ORDERS,
+        FORUM_NOT_FOUND,
+        TARGET_NOT_FOUND,
+        ROLE_NOT_FOUND,
+        ROLE_CANNOT_BE_MENTIONED,
+        SEND_FAILED
+    }
+
+    private record ManualDispatchResult(ManualDispatchStatus status,
+                                        String forumName,
+                                        String targetChannelId,
+                                        String errorMessage) {
+        private static ManualDispatchResult forStatus(ManualDispatchStatus status) {
+            return new ManualDispatchResult(status, "", "", null);
+        }
+
+        private static ManualDispatchResult forStatus(ManualDispatchStatus status,
+                                                      String forumName,
+                                                      String targetChannelId,
+                                                      String errorMessage) {
+            return new ManualDispatchResult(
+                    status,
+                    forumName == null ? "" : forumName,
+                    targetChannelId == null ? "" : targetChannelId,
+                    errorMessage
+            );
         }
     }
 }
