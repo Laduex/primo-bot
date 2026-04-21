@@ -31,6 +31,15 @@ public class CompletedCommandHandler {
         }
 
         event.deferReply(true).queue();
+        String completedMessage = "Order complete. Closed by " + event.getUser().getAsMention() + ".";
+
+        threadChannel.sendMessage(completedMessage).queue(
+                ignored -> archiveThread(event, threadChannel),
+                failure -> event.getHook().editOriginal("Failed to post completion message: " + failure.getMessage()).queue()
+        );
+    }
+
+    private void archiveThread(SlashCommandInteractionEvent event, ThreadChannel threadChannel) {
         threadChannel.getManager()
                 .setArchived(true)
                 .queue(
