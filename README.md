@@ -5,6 +5,7 @@ Standalone Discord bot service for Primo operations slash commands.
 ## Features
 
 - `/order` flow: `Order From?` (forums under `Orders` category only) + `Customer name`, then send the next normal channel message as the order body
+- `/completed` close command for forum posts (run inside a forum thread to archive/close it)
 - `/vat` PH standard VAT calculator (12%), available in server channels and bot DMs
 - Optional forum auto-mention: ping configured roles whenever a user creates a new post in selected forums
 - Guild-specific command registration support via `DISCORD_GUILD_ID`

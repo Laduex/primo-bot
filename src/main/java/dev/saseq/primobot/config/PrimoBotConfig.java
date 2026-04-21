@@ -30,14 +30,16 @@ public class PrimoBotConfig {
 
         var vatCommand = PrimoCommands.buildVatSlashCommand();
         var orderCommand = PrimoCommands.buildOrderSlashCommand();
+        var completedCommand = PrimoCommands.buildCompletedSlashCommand();
 
         if (defaultGuildId != null && !defaultGuildId.isBlank()) {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
-                syncGuildCommands(guild, vatCommand, orderCommand);
+                syncGuildCommands(guild, vatCommand, orderCommand, completedCommand);
                 deleteGlobalCommandsByName(jda, Set.of(
                         PrimoCommands.COMMAND_VAT,
                         PrimoCommands.COMMAND_ORDER,
+                        PrimoCommands.COMMAND_COMPLETED,
                         "recipe",
                         "supplier",
                         "primo"
@@ -48,6 +50,7 @@ public class PrimoBotConfig {
 
         syncGlobalVatCommand(jda, vatCommand);
         jda.upsertCommand(orderCommand).queue();
+        jda.upsertCommand(completedCommand).queue();
         deleteGlobalCommandsByName(jda, Set.of("recipe", "supplier", "primo"));
         return jda;
     }
@@ -58,9 +61,11 @@ public class PrimoBotConfig {
 
     private void syncGuildCommands(Guild guild,
                                    CommandData vatCommand,
-                                   CommandData orderCommand) {
+                                   CommandData orderCommand,
+                                   CommandData completedCommand) {
         guild.upsertCommand(vatCommand).queue();
         guild.upsertCommand(orderCommand).queue();
+        guild.upsertCommand(completedCommand).queue();
         deleteGuildCommandsByName(guild, Set.of("recipe", "supplier", "primo"));
     }
 

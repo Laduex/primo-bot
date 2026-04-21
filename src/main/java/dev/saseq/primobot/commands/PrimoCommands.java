@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 public final class PrimoCommands {
     public static final String COMMAND_VAT = "vat";
     public static final String COMMAND_ORDER = "order";
+    public static final String COMMAND_COMPLETED = "completed";
 
     public static final String VAT_AMOUNT_OPTION = "amount";
     public static final String VAT_BASIS_OPTION = "basis";
@@ -35,5 +36,9 @@ public final class PrimoCommands {
                                 .setAutoComplete(true),
                         new OptionData(OptionType.STRING, ORDER_CUSTOMER_OPTION, "Customer name", true)
                 );
+    }
+
+    public static CommandData buildCompletedSlashCommand() {
+        return Commands.slash(COMMAND_COMPLETED, "Mark this forum post as completed and close it");
     }
 }
