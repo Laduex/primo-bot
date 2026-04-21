@@ -24,6 +24,7 @@ public class ForumAutoMentionHandler {
     private static final Pattern SNOWFLAKE_PATTERN = Pattern.compile("\\d+");
     private static final String ORDERS_CATEGORY_NAME = "Orders";
     private static final String FOLLOW_HINT = "New Order! Acknowledge and follow the post for updates.";
+    private static final int HISTORY_LOOKBACK_COUNT = 15;
 
     private final Map<String, List<String>> forumRoleTargets;
     private final Set<String> processedThreadIds = ConcurrentHashMap.newKeySet();
@@ -70,7 +71,28 @@ public class ForumAutoMentionHandler {
                 .map(roleId -> "<@&" + roleId + ">")
                 .collect(Collectors.joining(" "));
         String content = mentions + "\n" + FOLLOW_HINT;
+        String selfUserId = event.getJDA().getSelfUser().getId();
 
+        thread.getHistory().retrievePast(HISTORY_LOOKBACK_COUNT).queue(
+                messages -> {
+                    boolean alreadyMentioned = messages.stream()
+                            .anyMatch(message -> selfUserId.equals(message.getAuthor().getId())
+                                    && message.getContentRaw().contains(FOLLOW_HINT));
+                    if (alreadyMentioned) {
+                        LOG.info("Skipped forum auto-mention in thread {} because hint already exists.", thread.getId());
+                        return;
+                    }
+                    sendAutoMention(thread, forumChannel, content);
+                },
+                failure -> {
+                    LOG.warn("Could not inspect thread {} history before auto-mention: {}",
+                            thread.getId(), failure.getMessage());
+                    sendAutoMention(thread, forumChannel, content);
+                }
+        );
+    }
+
+    private void sendAutoMention(ThreadChannel thread, ForumChannel forumChannel, String content) {
         thread.sendMessage(content).queue(
                 ignored -> LOG.info("Posted forum auto-mention in thread {} (forum {}).", thread.getId(), forumChannel.getId()),
                 failure -> {
