@@ -7,10 +7,17 @@ services:
     restart: unless-stopped
     ports:
       - "8086:8086"
+    volumes:
+      - ./data:/data
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
       FORUM_AUTO_MENTION_TARGETS: ${FORUM_AUTO_MENTION_TARGETS:-}
+      ORDER_REMINDER_CONFIG_PATH: ${ORDER_REMINDER_CONFIG_PATH:-/data/orders-reminder-config.json}
+      ORDER_REMINDER_DEFAULT_ENABLED: ${ORDER_REMINDER_DEFAULT_ENABLED:-true}
+      ORDER_REMINDER_DEFAULT_TIME: ${ORDER_REMINDER_DEFAULT_TIME:-08:00}
+      ORDER_REMINDER_DEFAULT_TIMEZONE: ${ORDER_REMINDER_DEFAULT_TIMEZONE:-Asia/Manila}
+      ORDER_REMINDER_DEFAULT_ROUTES: ${ORDER_REMINDER_DEFAULT_ROUTES:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8086/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 30s
