@@ -28,7 +28,7 @@ public class OrdersReminderConfigStore {
             "1495586749802610708:1494175305743601755:1494215727857532980;" +
             "1495586880983531680:1494175215071006730:1494215689165213818";
 
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final Path configPath;
     private final boolean defaultEnabled;
     private final int defaultHour;
@@ -39,13 +39,11 @@ public class OrdersReminderConfigStore {
     private OrdersReminderConfig currentConfig;
 
     public OrdersReminderConfigStore(
-            ObjectMapper objectMapper,
             @Value("${ORDER_REMINDER_CONFIG_PATH:/data/orders-reminder-config.json}") String configPath,
             @Value("${ORDER_REMINDER_DEFAULT_ENABLED:true}") boolean defaultEnabled,
             @Value("${ORDER_REMINDER_DEFAULT_TIME:08:00}") String defaultTime,
             @Value("${ORDER_REMINDER_DEFAULT_TIMEZONE:Asia/Manila}") String defaultTimezone,
             @Value("${ORDER_REMINDER_DEFAULT_ROUTES:" + FALLBACK_DEFAULT_ROUTES + "}") String defaultRoutesRaw) {
-        this.objectMapper = objectMapper;
         this.configPath = Path.of(configPath);
         this.defaultEnabled = defaultEnabled;
         this.defaultTimezone = defaultTimezone == null ? "Asia/Manila" : defaultTimezone.trim();

@@ -1,6 +1,5 @@
 package dev.saseq.primobot.reminders;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -20,7 +19,6 @@ class OrdersReminderConfigStoreTest {
     void initializesDefaultConfigAndPersistsFile() throws Exception {
         Path configPath = tempDir.resolve("orders-reminder-config.json");
         OrdersReminderConfigStore store = new OrdersReminderConfigStore(
-                new ObjectMapper(),
                 configPath.toString(),
                 true,
                 "08:00",
@@ -45,7 +43,6 @@ class OrdersReminderConfigStoreTest {
     void replaceAndPersistWritesUpdatedValues() {
         Path configPath = tempDir.resolve("nested").resolve("orders-reminder-config.json");
         OrdersReminderConfigStore store = new OrdersReminderConfigStore(
-                new ObjectMapper(),
                 configPath.toString(),
                 true,
                 "08:00",
