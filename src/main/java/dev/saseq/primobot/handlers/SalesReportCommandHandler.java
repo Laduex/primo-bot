@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -274,6 +275,20 @@ public class SalesReportCommandHandler {
         }
 
         String scope = event.getOption("scope", "all", OptionMapping::getAsString).trim().toLowerCase(Locale.ENGLISH);
+        if (!"all".equals(scope) && !"single".equals(scope)) {
+            event.reply("Invalid `scope`. Use `All Accounts` or `Single Account`.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if (!"single".equals(scope) && event.getOption("account-id") != null) {
+            event.reply("`account-id` is only used when `scope` is `Single Account`.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         String selectedAccountId = "";
         if ("single".equals(scope)) {
             selectedAccountId = event.getOption("account-id", "", OptionMapping::getAsString).trim();
@@ -287,10 +302,22 @@ public class SalesReportCommandHandler {
 
         String finalOverrideTargetId = overrideTargetId;
         String finalSelectedAccountId = selectedAccountId;
+        var guild = event.getGuild();
         event.deferReply(true).queue(hook -> {
-            SalesReportExecutorService.DispatchResult result =
-                    schedulerService.runNow(event.getGuild(), finalOverrideTargetId, finalSelectedAccountId);
-            replyRunNowResult(hook, result);
+            CompletableFuture
+                    .supplyAsync(() -> schedulerService.runNow(guild, finalOverrideTargetId, finalSelectedAccountId))
+                    .whenComplete((result, error) -> {
+                        if (error != null) {
+                            Throwable cause = error.getCause() != null ? error.getCause() : error;
+                            String message = cause.getMessage();
+                            if (message == null || message.isBlank()) {
+                                message = "Unknown error";
+                            }
+                            hook.editOriginal("Failed to send sales report: " + message).queue();
+                            return;
+                        }
+                        replyRunNowResult(hook, result);
+                    });
         });
     }
 
