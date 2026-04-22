@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +24,7 @@ public class SalesReportSchedulerService {
     private final SalesReportExecutorService executorService;
     private final String defaultGuildId;
 
-    public SalesReportSchedulerService(JDA jda,
+    public SalesReportSchedulerService(@Lazy JDA jda,
                                        SalesReportConfigStore configStore,
                                        SalesReportExecutorService executorService,
                                        @Value("${DISCORD_GUILD_ID:}") String defaultGuildId) {
