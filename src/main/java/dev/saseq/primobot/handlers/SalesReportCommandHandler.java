@@ -274,7 +274,10 @@ public class SalesReportCommandHandler {
             overrideTargetId = targetOption.getAsChannel().getId();
         }
 
-        String scope = event.getOption("scope", "all", OptionMapping::getAsString).trim().toLowerCase(Locale.ENGLISH);
+        OptionMapping scopeOption = event.getOption("scope");
+        String scope = scopeOption == null
+                ? "all"
+                : scopeOption.getAsString().trim().toLowerCase(Locale.ENGLISH);
         if (!"all".equals(scope) && !"single".equals(scope)) {
             event.reply("Invalid `scope`. Use `All Accounts` or `Single Account`.")
                     .setEphemeral(true)
@@ -282,8 +285,13 @@ public class SalesReportCommandHandler {
             return;
         }
 
-        if (!"single".equals(scope) && event.getOption("account-id") != null) {
-            event.reply("`account-id` is only used when `scope` is `Single Account`.")
+        String providedAccountId = event.getOption("account-id", "", OptionMapping::getAsString).trim();
+        if (scopeOption == null && !providedAccountId.isBlank()) {
+            scope = "single";
+        }
+
+        if ("all".equals(scope) && !providedAccountId.isBlank()) {
+            event.reply("`account-id` is only used when `scope` is `Single Account`. Set `scope` to `Single Account` or remove `account-id`.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -291,9 +299,9 @@ public class SalesReportCommandHandler {
 
         String selectedAccountId = "";
         if ("single".equals(scope)) {
-            selectedAccountId = event.getOption("account-id", "", OptionMapping::getAsString).trim();
+            selectedAccountId = providedAccountId;
             if (selectedAccountId.isBlank()) {
-                event.reply("`account-id` is required when `scope` is Single Account.")
+                event.reply("`account-id` is required when `scope` is Single Account. Run `/sales-report list-accounts` to view valid IDs.")
                         .setEphemeral(true)
                         .queue();
                 return;
@@ -323,17 +331,37 @@ public class SalesReportCommandHandler {
 
     private void replyRunNowResult(InteractionHook hook, SalesReportExecutorService.DispatchResult result) {
         switch (result.status()) {
-            case SENT -> hook.editOriginal("Sales report sent to <#%s>. Success: `%d`, Failed: `%d`."
-                            .formatted(result.targetChannelId(), result.successCount(), result.failureCount()))
-                    .queue();
+            case SENT -> {
+                String scopeLabel = result.accountId() == null || result.accountId().isBlank()
+                        ? "all enabled accounts"
+                        : "account `%s`".formatted(result.accountId());
+                hook.editOriginal("Sales report sent to <#%s> for %s. Success: `%d`, Failed: `%d`."
+                                .formatted(result.targetChannelId(), scopeLabel, result.successCount(), result.failureCount()))
+                        .queue();
+            }
             case TARGET_NOT_CONFIGURED -> hook.editOriginal("No target channel configured. Run `/sales-report set-channel` or pass `target` in `/sales-report run-now`.")
                     .queue();
             case TARGET_NOT_FOUND -> hook.editOriginal("Target channel `<#%s>` was not found.".formatted(result.targetChannelId()))
                     .queue();
-            case ACCOUNT_NOT_FOUND -> hook.editOriginal("No account found for id `%s`.".formatted(result.accountId()))
-                    .queue();
-            case GUILD_NOT_FOUND, SEND_FAILED -> hook.editOriginal("Failed to send sales report: " + result.message())
-                    .queue();
+            case ACCOUNT_NOT_FOUND -> {
+                String accountId = result.accountId() == null ? "" : result.accountId().trim();
+                if (accountId.isBlank()) {
+                    hook.editOriginal("No matching account was found. Run `/sales-report list-accounts` to check valid account IDs.")
+                            .queue();
+                } else {
+                    hook.editOriginal("No account found for id `%s`. Run `/sales-report list-accounts` to check valid account IDs."
+                                    .formatted(accountId))
+                            .queue();
+                }
+            }
+            case GUILD_NOT_FOUND, SEND_FAILED -> {
+                String message = result.message();
+                if (message == null || message.isBlank()) {
+                    message = "Unknown error";
+                }
+                hook.editOriginal("Failed to send sales report: " + message)
+                        .queue();
+            }
         }
     }
 

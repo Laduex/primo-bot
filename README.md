@@ -100,8 +100,10 @@ Admin-only command (Manage Server permission required).
 - `clear-times confirm:<true|false>`
 - `set-channel target:<text-channel>`
 - Run:
-- `run-now target:<optional text-channel>`
+- `run-now target:<optional text-or-forum-channel> scope:<optional all|single> account-id:<optional>`
 - `target` overrides destination for this run only (does not persist)
+- `scope` defaults to `all`; if `account-id` is provided and `scope` is omitted, it runs as single-account
+- `account-id` is required when `scope:single`
 - Accounts:
 - `list-accounts`
 - `add-account platform:<UTAK|LOYVERSE> name:<text> account-id:<optional> username:<optional> password:<optional> token:<optional> base-url:<optional> sales-url:<optional>`
