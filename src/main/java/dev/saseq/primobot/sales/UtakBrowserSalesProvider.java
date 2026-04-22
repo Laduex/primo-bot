@@ -1,26 +1,28 @@
 package dev.saseq.primobot.sales;
 
-import org.htmlunit.BrowserVersion;
-import org.htmlunit.WebClient;
-import org.htmlunit.html.HtmlButton;
-import org.htmlunit.html.HtmlForm;
-import org.htmlunit.html.HtmlInput;
-import org.htmlunit.html.HtmlPage;
-import org.htmlunit.html.HtmlPasswordInput;
-import org.htmlunit.html.HtmlSubmitInput;
-import org.htmlunit.html.HtmlTextInput;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Iterator;
+import java.util.Map;
 
 @Component
 public class UtakBrowserSalesProvider implements SalesProvider {
-    private static final Pattern NET_SALES_PATTERN = Pattern.compile("(?i)Total\\s*Net\\s*Sales[^\\d-]*([\\d,]+(?:\\.\\d{1,2})?)");
-    private static final int JS_WAIT_MS = 7000;
+    private static final String DEFAULT_FIREBASE_API_KEY = "AIzaSyAIPL4akKeV62h4RRUn7jPhHy1JfXBqW-g";
+    private static final String DEFAULT_FIREBASE_DB_URL = "https://posfire-8d2cb.firebaseio.com";
+    private static final String FIREBASE_API_KEY_ENV = "UTAK_FIREBASE_API_KEY";
+    private static final String FIREBASE_DB_URL_ENV = "UTAK_FIREBASE_DB_URL";
+
+    private final RestClient restClient = RestClient.create();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public SalesPlatform platform() {
@@ -29,173 +31,191 @@ public class UtakBrowserSalesProvider implements SalesProvider {
 
     @Override
     public SalesAccountResult fetchTodayCumulative(SalesAccountConfig account, SalesFetchContext context) {
-        String entryUrl = firstNonBlank(account.getSalesPageUrl(), account.getBaseUrl());
-        if (entryUrl.isBlank()) {
-            throw new IllegalArgumentException("Missing UTAK base URL or sales page URL");
+        String username = trim(account.getUsername());
+        String password = trim(account.getPassword());
+        if (username.isBlank() || password.isBlank()) {
+            throw new IllegalArgumentException("UTAK account requires username and password");
         }
 
-        try (WebClient webClient = new WebClient(BrowserVersion.BEST_SUPPORTED)) {
-            webClient.getOptions().setCssEnabled(true);
-            webClient.getOptions().setJavaScriptEnabled(true);
-            webClient.getOptions().setThrowExceptionOnScriptError(false);
-            webClient.getOptions().setThrowExceptionOnFailingStatusCode(false);
-            webClient.getOptions().setTimeout(15000);
+        try {
+            String apiKey = resolveFirebaseApiKey();
+            String dbBaseUrl = resolveFirebaseDbBaseUrl(account);
 
-            HtmlPage page = webClient.getPage(entryUrl);
-            webClient.waitForBackgroundJavaScript(JS_WAIT_MS);
+            AuthSession session = authenticateWithFirebase(username, password, apiKey);
+            String transactionsJson = fetchTransactionsJson(
+                    dbBaseUrl,
+                    session.uid(),
+                    session.idToken(),
+                    context.reportDate(),
+                    context.zoneId()
+            );
+            BigDecimal totalNetSales = sumTotalNetSalesFromTransactionsJson(transactionsJson);
 
-            page = tryLogin(page, webClient, account);
-
-            String salesUrl = account.getSalesPageUrl() == null ? "" : account.getSalesPageUrl().trim();
-            if (!salesUrl.isBlank() && !salesUrl.equalsIgnoreCase(page.getUrl().toString())) {
-                page = webClient.getPage(salesUrl);
-                webClient.waitForBackgroundJavaScript(JS_WAIT_MS);
-            }
-
-            String amountText = extractTotalNetSales(page);
-            BigDecimal amount = parseMoney(amountText);
-            return SalesAccountResult.success(account, SalesPlatform.UTAK, SalesPlatform.UTAK.getMetricLabel(), amount);
+            return SalesAccountResult.success(account, SalesPlatform.UTAK, SalesPlatform.UTAK.getMetricLabel(), totalNetSales);
         } catch (Exception ex) {
             throw new IllegalStateException("Failed UTAK fetch for account '%s': %s"
                     .formatted(account.getName(), ex.getMessage()), ex);
         }
     }
 
-    private HtmlPage tryLogin(HtmlPage page, WebClient webClient, SalesAccountConfig account) {
-        String username = account.getUsername() == null ? "" : account.getUsername().trim();
-        String password = account.getPassword() == null ? "" : account.getPassword().trim();
-        if (username.isBlank() || password.isBlank()) {
-            return page;
+    private AuthSession authenticateWithFirebase(String username, String password, String apiKey) throws Exception {
+        String authUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + encode(apiKey);
+
+        JsonNode payload = objectMapper.createObjectNode()
+                .put("email", username)
+                .put("password", password)
+                .put("returnSecureToken", true);
+
+        String responseBody = restClient.post()
+                .uri(authUrl)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(payload.toString())
+                .retrieve()
+                .body(String.class);
+
+        if (responseBody == null || responseBody.isBlank()) {
+            throw new IllegalStateException("UTAK auth returned empty response");
         }
 
-        try {
-            String pageText = page.asNormalizedText().toLowerCase(Locale.ENGLISH);
-            boolean mightNeedLogin = pageText.contains("login")
-                    || pageText.contains("sign in")
-                    || !page.getByXPath("//input[@type='password']").isEmpty();
-            if (!mightNeedLogin) {
-                return page;
-            }
-
-            HtmlForm targetForm = page.getForms().isEmpty() ? null : page.getForms().get(0);
-            HtmlTextInput usernameInput = findUsernameInput(page, targetForm);
-            HtmlPasswordInput passwordInput = findPasswordInput(page, targetForm);
-            if (usernameInput == null || passwordInput == null) {
-                return page;
-            }
-
-            usernameInput.setValueAttribute(username);
-            passwordInput.setValueAttribute(password);
-
-            HtmlPage nextPage = clickSubmit(page, targetForm);
-            webClient.waitForBackgroundJavaScript(JS_WAIT_MS);
-            return nextPage == null ? page : nextPage;
-        } catch (Exception ignored) {
-            return page;
+        JsonNode root = objectMapper.readTree(responseBody);
+        String uid = trim(readString(root, "localId"));
+        String idToken = trim(readString(root, "idToken"));
+        if (uid.isBlank() || idToken.isBlank()) {
+            throw new IllegalStateException("UTAK auth missing localId/idToken");
         }
+
+        return new AuthSession(uid, idToken);
     }
 
-    private HtmlTextInput findUsernameInput(HtmlPage page, HtmlForm form) {
-        List<String> names = List.of("username", "email", "user", "login");
-        if (form != null) {
-            for (String name : names) {
-                try {
-                    HtmlInput input = form.getInputByName(name);
-                    if (input instanceof HtmlTextInput textInput) {
-                        return textInput;
-                    }
-                } catch (Exception ignored) {
-                    // try the next common field name
-                }
+    private String fetchTransactionsJson(String dbBaseUrl,
+                                         String uid,
+                                         String idToken,
+                                         LocalDate reportDate,
+                                         ZoneId zoneId) {
+        long startEpoch = reportDate.atStartOfDay(zoneId).toEpochSecond();
+        long endEpoch = reportDate.plusDays(1).atStartOfDay(zoneId).minusSeconds(1).toEpochSecond();
+
+        String transactionsUrl = dbBaseUrl
+                + "/"
+                + encodePath(uid)
+                + "/transactions.json"
+                + "?orderBy=%22$key%22"
+                + "&startAt=%22" + startEpoch + "%22"
+                + "&endAt=%22" + endEpoch + "%22"
+                + "&auth=" + encode(idToken);
+
+        String body = restClient.get()
+                .uri(transactionsUrl)
+                .retrieve()
+                .body(String.class);
+
+        return body == null ? "null" : body;
+    }
+
+    static BigDecimal sumTotalNetSalesFromTransactionsJson(String transactionsJson) throws Exception {
+        if (transactionsJson == null || transactionsJson.isBlank() || "null".equalsIgnoreCase(transactionsJson.trim())) {
+            return BigDecimal.ZERO;
+        }
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(transactionsJson);
+        if (root == null || root.isNull() || !root.isObject()) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal total = BigDecimal.ZERO;
+        Iterator<Map.Entry<String, JsonNode>> entries = root.fields();
+        while (entries.hasNext()) {
+            Map.Entry<String, JsonNode> entry = entries.next();
+            JsonNode transaction = entry.getValue();
+            if (transaction == null || transaction.isNull() || !transaction.isObject()) {
+                continue;
+            }
+            if (transaction.path("_deleted").asBoolean(false)) {
+                continue;
+            }
+
+            JsonNode totalNode = transaction.get("total");
+            BigDecimal amount = parseAmount(totalNode);
+            if (amount != null) {
+                total = total.add(amount);
             }
         }
 
-        for (Object node : page.getByXPath("//input[@type='text' or @type='email']")) {
-            if (node instanceof HtmlTextInput textInput) {
-                String name = textInput.getNameAttribute().toLowerCase(Locale.ENGLISH);
-                if (names.stream().anyMatch(name::contains)) {
-                    return textInput;
-                }
+        return total;
+    }
+
+    private static BigDecimal parseAmount(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.decimalValue();
+        }
+        if (node.isTextual()) {
+            String raw = node.asText().replace(",", "").trim();
+            if (raw.isEmpty()) {
+                return null;
+            }
+            try {
+                return new BigDecimal(raw);
+            } catch (Exception ignored) {
+                return null;
             }
         }
         return null;
     }
 
-    private HtmlPasswordInput findPasswordInput(HtmlPage page, HtmlForm form) {
-        if (form != null) {
-            for (Object node : form.getByXPath(".//input[@type='password']")) {
-                if (node instanceof HtmlPasswordInput input) {
-                    return input;
-                }
-            }
+    private String resolveFirebaseApiKey() {
+        String fromEnv = trim(System.getenv(FIREBASE_API_KEY_ENV));
+        if (!fromEnv.isBlank()) {
+            return fromEnv;
         }
-
-        for (Object node : page.getByXPath("//input[@type='password']")) {
-            if (node instanceof HtmlPasswordInput input) {
-                return input;
-            }
-        }
-        return null;
+        return DEFAULT_FIREBASE_API_KEY;
     }
 
-    private HtmlPage clickSubmit(HtmlPage page, HtmlForm form) {
-        try {
-            if (form != null) {
-                for (Object node : form.getByXPath(".//button[@type='submit']")) {
-                    if (node instanceof HtmlButton button) {
-                        return button.click();
-                    }
-                }
-                for (Object node : form.getByXPath(".//input[@type='submit']")) {
-                    if (node instanceof HtmlSubmitInput input) {
-                        return input.click();
-                    }
-                }
-            }
-
-            for (Object node : page.getByXPath("//button[@type='submit']")) {
-                if (node instanceof HtmlButton button) {
-                    return button.click();
-                }
-            }
-        } catch (Exception ignored) {
-            return page;
+    private String resolveFirebaseDbBaseUrl(SalesAccountConfig account) {
+        String fromEnv = trim(System.getenv(FIREBASE_DB_URL_ENV));
+        if (!fromEnv.isBlank()) {
+            return stripTrailingSlash(fromEnv);
         }
-        return page;
+
+        String configured = trim(account.getBaseUrl());
+        if (configured.contains("firebaseio.com")) {
+            return stripTrailingSlash(configured);
+        }
+
+        return DEFAULT_FIREBASE_DB_URL;
     }
 
-    private String extractTotalNetSales(HtmlPage page) {
-        String normalizedText = page.asNormalizedText();
-        Matcher matcher = NET_SALES_PATTERN.matcher(normalizedText);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-
-        String rawXml = page.asXml();
-        matcher = NET_SALES_PATTERN.matcher(rawXml);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-
-        throw new IllegalStateException("Could not locate 'Total Net Sales' on page");
+    private String readString(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? "" : value.asText("");
     }
 
-    private BigDecimal parseMoney(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            throw new IllegalArgumentException("Empty sales value");
-        }
-
-        String normalized = rawValue.replace(",", "").trim();
-        return new BigDecimal(normalized);
+    private String encode(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
-    private String firstNonBlank(String first, String second) {
-        if (first != null && !first.trim().isBlank()) {
-            return first.trim();
+    private String encodePath(String value) {
+        return encode(value).replace("+", "%20");
+    }
+
+    private String stripTrailingSlash(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
         }
-        if (second != null && !second.trim().isBlank()) {
-            return second.trim();
+        String trimmed = value.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
-        return "";
+        return trimmed;
+    }
+
+    private String trim(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private record AuthSession(String uid, String idToken) {
     }
 }
