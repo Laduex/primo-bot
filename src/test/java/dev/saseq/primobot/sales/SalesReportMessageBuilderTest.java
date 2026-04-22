@@ -23,6 +23,7 @@ class SalesReportMessageBuilderTest {
         assertEquals("Good Afternoon", builder.resolveGreeting(LocalTime.of(12, 0)));
         assertEquals("Good Afternoon", builder.resolveGreeting(LocalTime.of(17, 59)));
         assertEquals("Good Evening", builder.resolveGreeting(LocalTime.of(18, 0)));
+        assertEquals("Good Evening", builder.resolveGreeting(LocalTime.of(4, 59)));
     }
 
     @Test
