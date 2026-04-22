@@ -17,13 +17,8 @@ import java.util.List;
 public class LoyverseApiSalesProvider implements SalesProvider {
     private static final String DEFAULT_RECEIPTS_URL = "https://api.loyverse.com/v1.0/receipts";
 
-    private final RestClient restClient;
-    private final ObjectMapper objectMapper;
-
-    public LoyverseApiSalesProvider(ObjectMapper objectMapper) {
-        this.restClient = RestClient.create();
-        this.objectMapper = objectMapper;
-    }
+    private final RestClient restClient = RestClient.create();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public SalesPlatform platform() {
