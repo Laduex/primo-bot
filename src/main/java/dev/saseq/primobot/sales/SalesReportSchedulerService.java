@@ -60,7 +60,7 @@ public class SalesReportSchedulerService {
             return;
         }
 
-        SalesReportExecutorService.DispatchResult result = executorService.execute(guild, config, null);
+        SalesReportExecutorService.DispatchResult result = executorService.execute(guild, config, null, null);
         if (result.sent()) {
             config.getLastRunDateBySlot().put(slot, todayText);
             configStore.replaceAndPersist(config);
@@ -74,9 +74,11 @@ public class SalesReportSchedulerService {
         }
     }
 
-    public SalesReportExecutorService.DispatchResult runNow(Guild guild, String overrideTargetChannelId) {
+    public SalesReportExecutorService.DispatchResult runNow(Guild guild,
+                                                            String overrideTargetChannelId,
+                                                            String selectedAccountId) {
         SalesReportConfig config = configStore.getSnapshot();
-        return executorService.execute(guild, config, overrideTargetChannelId);
+        return executorService.execute(guild, config, overrideTargetChannelId, selectedAccountId);
     }
 
     private Guild resolveGuild() {

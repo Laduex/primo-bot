@@ -53,8 +53,10 @@ class SalesReportMessageBuilderTest {
 
         String message = builder.buildMessage(snapshot, "casual", "Thanks, Primo");
         assertTrue(message.contains("Good Morning, team!"));
-        assertTrue(message.contains("UTAK - Total Net Sales"));
-        assertTrue(message.contains("Grand Total"));
+        assertTrue(message.contains("- **UTAK Main**: `PHP 1,000.50`"));
+        assertTrue(message.contains("**Grand Total:** `PHP 1,000.50`"));
+        assertTrue(!message.contains("Subtotal:"));
+        assertTrue(!message.contains("UTAK Net + Loyverse Gross"));
         assertTrue(message.contains("Heads up"));
         assertTrue(message.endsWith("Thanks, Primo"));
     }

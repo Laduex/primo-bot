@@ -261,8 +261,10 @@ public class SalesReportCommandHandler {
         String overrideTargetId = "";
         OptionMapping targetOption = event.getOption("target");
         if (targetOption != null) {
-            if (targetOption.getType() != OptionType.CHANNEL || targetOption.getAsChannel().getType() != ChannelType.TEXT) {
-                event.reply("`target` must be a text channel.")
+            if (targetOption.getType() != OptionType.CHANNEL
+                    || (targetOption.getAsChannel().getType() != ChannelType.TEXT
+                    && targetOption.getAsChannel().getType() != ChannelType.FORUM)) {
+                event.reply("`target` must be a text or forum channel.")
                         .setEphemeral(true)
                         .queue();
                 return;
@@ -270,7 +272,19 @@ public class SalesReportCommandHandler {
             overrideTargetId = targetOption.getAsChannel().getId();
         }
 
-        SalesReportExecutorService.DispatchResult result = schedulerService.runNow(event.getGuild(), overrideTargetId);
+        String scope = event.getOption("scope", "all", OptionMapping::getAsString).trim().toLowerCase(Locale.ENGLISH);
+        String selectedAccountId = "";
+        if ("single".equals(scope)) {
+            selectedAccountId = event.getOption("account-id", "", OptionMapping::getAsString).trim();
+            if (selectedAccountId.isBlank()) {
+                event.reply("`account-id` is required when `scope` is Single Account.")
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+        }
+
+        SalesReportExecutorService.DispatchResult result = schedulerService.runNow(event.getGuild(), overrideTargetId, selectedAccountId);
         switch (result.status()) {
             case SENT -> event.reply("Sales report sent to <#%s>. Success: `%d`, Failed: `%d`."
                             .formatted(result.targetChannelId(), result.successCount(), result.failureCount()))
@@ -280,6 +294,9 @@ public class SalesReportCommandHandler {
                     .setEphemeral(true)
                     .queue();
             case TARGET_NOT_FOUND -> event.reply("Target channel `<#%s>` was not found.".formatted(result.targetChannelId()))
+                    .setEphemeral(true)
+                    .queue();
+            case ACCOUNT_NOT_FOUND -> event.reply("No account found for id `%s`.".formatted(result.accountId()))
                     .setEphemeral(true)
                     .queue();
             case GUILD_NOT_FOUND, SEND_FAILED -> event.reply("Failed to send sales report: " + result.message())

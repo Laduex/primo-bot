@@ -113,8 +113,14 @@ public final class PrimoCommands {
                                 .addOptions(new OptionData(OptionType.CHANNEL, "target", "Target text channel", true)
                                         .setChannelTypes(ChannelType.TEXT)),
                         new SubcommandData("run-now", "Send a sales report immediately")
-                                .addOptions(new OptionData(OptionType.CHANNEL, "target", "Optional one-time target override", false)
-                                        .setChannelTypes(ChannelType.TEXT)),
+                                .addOptions(
+                                        new OptionData(OptionType.CHANNEL, "target", "Optional one-time target override (text or forum)", false)
+                                                .setChannelTypes(ChannelType.TEXT, ChannelType.FORUM),
+                                        new OptionData(OptionType.STRING, "scope", "Run all accounts or a single account", false)
+                                                .addChoice("All Accounts", "all")
+                                                .addChoice("Single Account", "single"),
+                                        new OptionData(OptionType.STRING, "account-id", "Required when scope is Single Account", false)
+                                ),
                         new SubcommandData("list-accounts", "List configured sales accounts"),
                         new SubcommandData("add-account", "Add a sales account")
                                 .addOptions(

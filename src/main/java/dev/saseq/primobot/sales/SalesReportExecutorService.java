@@ -2,14 +2,23 @@ package dev.saseq.primobot.sales;
 
 import dev.saseq.primobot.util.DiscordMessageUtils;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.channel.concrete.ForumChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
+import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import org.springframework.stereotype.Component;
 
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.time.ZoneId;
 
 @Component
 public class SalesReportExecutorService {
     private static final int DISCORD_MESSAGE_MAX_LENGTH = 2000;
+    private static final int FORUM_POST_TITLE_MAX = 100;
+    private static final DateTimeFormatter FORUM_TITLE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final SalesAggregatorService aggregatorService;
     private final SalesReportMessageBuilder messageBuilder;
@@ -20,38 +29,58 @@ public class SalesReportExecutorService {
         this.messageBuilder = messageBuilder;
     }
 
-    public DispatchResult execute(Guild guild, SalesReportConfig config, String overrideTargetChannelId) {
+    public DispatchResult execute(Guild guild,
+                                  SalesReportConfig config,
+                                  String overrideTargetChannelId,
+                                  String selectedAccountId) {
         if (guild == null) {
-            return new DispatchResult(DispatchStatus.GUILD_NOT_FOUND, "", "No guild available", 0, 0);
+            return new DispatchResult(DispatchStatus.GUILD_NOT_FOUND, "", "", "No guild available", 0, 0);
         }
 
         String targetId = resolveTargetChannelId(config, overrideTargetChannelId);
         if (targetId.isBlank()) {
-            return new DispatchResult(DispatchStatus.TARGET_NOT_CONFIGURED, "", "No target channel configured", 0, 0);
+            return new DispatchResult(DispatchStatus.TARGET_NOT_CONFIGURED, "", "", "No target channel configured", 0, 0);
         }
 
-        TextChannel target = guild.getTextChannelById(targetId);
-        if (target == null) {
-            return new DispatchResult(DispatchStatus.TARGET_NOT_FOUND, targetId, "Target channel not found", 0, 0);
+        SalesReportConfig effectiveConfig = filterConfigByAccount(config, selectedAccountId);
+        if (effectiveConfig == null) {
+            return new DispatchResult(DispatchStatus.ACCOUNT_NOT_FOUND, targetId, selectedAccountId, "Account not found", 0, 0);
         }
 
-        ZoneId zoneId = resolveZoneId(config == null ? null : config.getTimezone());
-        SalesReportSnapshot snapshot = aggregatorService.aggregate(config, zoneId);
+        ZoneId zoneId = resolveZoneId(effectiveConfig.getTimezone());
+        SalesReportSnapshot snapshot = aggregatorService.aggregate(effectiveConfig, zoneId);
         String content = messageBuilder.buildMessage(
                 snapshot,
-                config == null ? "casual" : config.getMessageTone(),
-                config == null ? "Thanks, Primo" : config.getSignature());
+                effectiveConfig.getMessageTone(),
+                effectiveConfig.getSignature());
 
         try {
-            for (String chunk : DiscordMessageUtils.chunkMessage(content, DISCORD_MESSAGE_MAX_LENGTH)) {
-                target.sendMessage(chunk).complete();
+            List<String> chunks = DiscordMessageUtils.chunkMessage(content, DISCORD_MESSAGE_MAX_LENGTH);
+            TextChannel textTarget = guild.getTextChannelById(targetId);
+            if (textTarget != null) {
+                for (String chunk : chunks) {
+                    textTarget.sendMessage(chunk).complete();
+                }
+            } else {
+                ForumChannel forumTarget = guild.getForumChannelById(targetId);
+                if (forumTarget == null) {
+                    return new DispatchResult(DispatchStatus.TARGET_NOT_FOUND, targetId, selectedAccountId, "Target channel not found", 0, 0);
+                }
+
+                String title = buildForumPostTitle(zoneId, selectedAccountId);
+                ThreadChannel thread = forumTarget.createForumPost(title, MessageCreateData.fromContent(chunks.get(0)))
+                        .complete()
+                        .getThreadChannel();
+                for (int index = 1; index < chunks.size(); index++) {
+                    thread.sendMessage(chunks.get(index)).complete();
+                }
             }
 
             int successes = (int) snapshot.accountResults().stream().filter(SalesAccountResult::success).count();
             int failures = (int) snapshot.accountResults().stream().filter(result -> !result.success()).count();
-            return new DispatchResult(DispatchStatus.SENT, targetId, "Sent", successes, failures);
+            return new DispatchResult(DispatchStatus.SENT, targetId, selectedAccountId, "Sent", successes, failures);
         } catch (Exception ex) {
-            return new DispatchResult(DispatchStatus.SEND_FAILED, targetId, ex.getMessage(), 0, 0);
+            return new DispatchResult(DispatchStatus.SEND_FAILED, targetId, selectedAccountId, ex.getMessage(), 0, 0);
         }
     }
 
@@ -66,6 +95,38 @@ public class SalesReportExecutorService {
         return config.getTargetChannelId().trim();
     }
 
+    private SalesReportConfig filterConfigByAccount(SalesReportConfig config, String selectedAccountId) {
+        if (config == null) {
+            return null;
+        }
+
+        String requested = selectedAccountId == null ? "" : selectedAccountId.trim();
+        if (requested.isBlank()) {
+            return config;
+        }
+
+        List<SalesAccountConfig> selectedAccounts = new ArrayList<>();
+        for (SalesAccountConfig account : config.getAccounts()) {
+            if (account != null && requested.equalsIgnoreCase(account.getId())) {
+                selectedAccounts.add(account);
+            }
+        }
+        if (selectedAccounts.isEmpty()) {
+            return null;
+        }
+
+        SalesReportConfig filtered = new SalesReportConfig();
+        filtered.setEnabled(config.isEnabled());
+        filtered.setTimezone(config.getTimezone());
+        filtered.setTimes(config.getTimes());
+        filtered.setTargetChannelId(config.getTargetChannelId());
+        filtered.setMessageTone(config.getMessageTone());
+        filtered.setSignature(config.getSignature());
+        filtered.setLastRunDateBySlot(config.getLastRunDateBySlot());
+        filtered.setAccounts(selectedAccounts);
+        return filtered;
+    }
+
     private ZoneId resolveZoneId(String timezone) {
         try {
             return ZoneId.of(timezone);
@@ -74,16 +135,28 @@ public class SalesReportExecutorService {
         }
     }
 
+    private String buildForumPostTitle(ZoneId zoneId, String selectedAccountId) {
+        String timestamp = ZonedDateTime.now(zoneId).format(FORUM_TITLE_TIME_FORMATTER);
+        String scope = (selectedAccountId == null || selectedAccountId.isBlank()) ? "All Accounts" : selectedAccountId.trim();
+        String title = "Sales Report | " + scope + " | " + timestamp;
+        if (title.length() <= FORUM_POST_TITLE_MAX) {
+            return title;
+        }
+        return title.substring(0, FORUM_POST_TITLE_MAX);
+    }
+
     public enum DispatchStatus {
         SENT,
         GUILD_NOT_FOUND,
         TARGET_NOT_CONFIGURED,
         TARGET_NOT_FOUND,
+        ACCOUNT_NOT_FOUND,
         SEND_FAILED
     }
 
     public record DispatchResult(DispatchStatus status,
                                  String targetChannelId,
+                                 String accountId,
                                  String message,
                                  int successCount,
                                  int failureCount) {

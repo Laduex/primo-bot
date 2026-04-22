@@ -47,39 +47,24 @@ public class SalesReportMessageBuilder {
 
         results.sort(Comparator.comparing(SalesAccountResult::accountName, String.CASE_INSENSITIVE_ORDER));
 
-        for (SalesPlatform platform : SalesPlatform.values()) {
-            List<SalesAccountResult> platformResults = results.stream()
-                    .filter(result -> platform.equals(result.platform()))
-                    .toList();
-            if (platformResults.isEmpty()) {
+        boolean hasSuccess = false;
+        for (SalesAccountResult result : results) {
+            if (!result.success()) {
                 continue;
             }
-
-            content.append("**").append(platform.getDisplayName()).append(" - ").append(platform.getMetricLabel()).append("**\n");
-
-            boolean hasSuccess = false;
-            for (SalesAccountResult result : platformResults) {
-                if (!result.success()) {
-                    continue;
-                }
-                hasSuccess = true;
-                content.append("- **")
-                        .append(escapeMarkdown(result.accountName()))
-                        .append("**: `")
-                        .append(formatPhp(result.amount()))
-                        .append("`\n");
-            }
-
-            if (!hasSuccess) {
-                content.append("- (no successful fetches)\n");
-            }
-
-            content.append("Subtotal: `")
-                    .append(formatPhp(snapshot.subtotals().getOrDefault(platform, BigDecimal.ZERO)))
-                    .append("`\n\n");
+            hasSuccess = true;
+            content.append("- **")
+                    .append(escapeMarkdown(result.accountName()))
+                    .append("**: `")
+                    .append(formatPhp(result.amount()))
+                    .append("`\n");
         }
 
-        content.append("**Grand Total (UTAK Net + Loyverse Gross):** `")
+        if (!hasSuccess) {
+            content.append("- (no successful fetches)\n");
+        }
+
+        content.append("\n**Grand Total:** `")
                 .append(formatPhp(snapshot.grandTotal()))
                 .append("`\n");
 
@@ -98,8 +83,7 @@ public class SalesReportMessageBuilder {
                         .append(escapeMarkdown(failure.accountName()))
                         .append(" (")
                         .append(failure.platform() == null ? "Unknown" : failure.platform().getDisplayName())
-                        .append("): ")
-                        .append(escapeMarkdown(cleanError(failure.errorMessage())))
+                        .append("): couldn't fetch sales right now.")
                         .append("\n");
             }
         }
@@ -127,11 +111,4 @@ public class SalesReportMessageBuilder {
         return value.replace("`", "'").replace("*", "");
     }
 
-    private String cleanError(String rawError) {
-        if (rawError == null || rawError.isBlank()) {
-            return "Unable to fetch sales";
-        }
-        String normalized = rawError.trim().replace('\n', ' ');
-        return normalized.length() > 120 ? normalized.substring(0, 120) + "..." : normalized;
-    }
 }
