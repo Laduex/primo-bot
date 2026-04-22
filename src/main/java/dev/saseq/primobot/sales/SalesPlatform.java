@@ -4,7 +4,7 @@ import java.util.Locale;
 
 public enum SalesPlatform {
     UTAK("UTAK", "Total Net Sales"),
-    LOYVERSE("Loyverse", "Gross Sales Today");
+    LOYVERSE("Loyverse", "Gross Sales");
 
     private final String displayName;
     private final String metricLabel;

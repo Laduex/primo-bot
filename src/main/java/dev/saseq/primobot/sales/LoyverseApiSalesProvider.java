@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 @Component
 public class LoyverseApiSalesProvider implements SalesProvider {
@@ -37,42 +38,68 @@ public class LoyverseApiSalesProvider implements SalesProvider {
             endpoint = DEFAULT_RECEIPTS_URL;
         }
 
-        String responseBody = restClient.get()
-                .uri(endpoint)
-                .header("Authorization", "Bearer " + token)
-                .retrieve()
-                .body(String.class);
-
-        if (responseBody == null || responseBody.isBlank()) {
-            throw new IllegalStateException("Loyverse API returned empty response");
-        }
-
-        BigDecimal grossSalesToday = parseGrossSalesForDate(responseBody, context.reportDate(), context.zoneId());
+        BigDecimal grossSalesToday = fetchGrossSalesForDate(token, endpoint, context.reportDate(), context.zoneId());
         return SalesAccountResult.success(account, SalesPlatform.LOYVERSE, SalesPlatform.LOYVERSE.getMetricLabel(), grossSalesToday);
     }
 
-    private BigDecimal parseGrossSalesForDate(String rawJson, LocalDate reportDate, ZoneId zoneId) {
+    private BigDecimal fetchGrossSalesForDate(String token, String endpoint, LocalDate reportDate, ZoneId zoneId) {
+        String nextUrl = endpoint;
+        int page = 0;
+        BigDecimal total = BigDecimal.ZERO;
+        boolean hasAnyIncluded = false;
+
+        while (nextUrl != null && !nextUrl.isBlank()) {
+            page++;
+            if (page > 300) {
+                throw new IllegalStateException("Loyverse pagination exceeded safety limit");
+            }
+
+            String responseBody = restClient.get()
+                    .uri(nextUrl)
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(String.class);
+
+            if (responseBody == null || responseBody.isBlank()) {
+                throw new IllegalStateException("Loyverse API returned empty response");
+            }
+
+            PageResult pageResult = parseGrossSalesPageForDate(responseBody, reportDate, zoneId);
+            total = total.add(pageResult.amount());
+            if (pageResult.includedCount() > 0) {
+                hasAnyIncluded = true;
+            }
+            nextUrl = resolveNextUrl(endpoint, pageResult.cursor());
+        }
+
+        if (!hasAnyIncluded) {
+            return BigDecimal.ZERO;
+        }
+        return total;
+    }
+
+    private PageResult parseGrossSalesPageForDate(String rawJson, LocalDate reportDate, ZoneId zoneId) {
         try {
             JsonNode root = objectMapper.readTree(rawJson);
             List<JsonNode> receipts = resolveReceiptNodes(root);
             if (receipts.isEmpty()) {
-                throw new IllegalStateException("No receipts found in Loyverse response");
+                return new PageResult(BigDecimal.ZERO, 0, readCursor(root));
             }
 
-            BigDecimal total = BigDecimal.ZERO;
-            boolean hasAnyIncluded = false;
+            BigDecimal pageTotal = BigDecimal.ZERO;
+            int includedCount = 0;
             for (JsonNode receipt : receipts) {
                 if (!isReceiptOnReportDate(receipt, reportDate, zoneId)) {
                     continue;
                 }
-                hasAnyIncluded = true;
-                total = total.add(extractGrossAmount(receipt));
+                if (isRefundReceipt(receipt)) {
+                    continue;
+                }
+                includedCount++;
+                pageTotal = pageTotal.add(extractGrossAmount(receipt));
             }
 
-            if (!hasAnyIncluded) {
-                return BigDecimal.ZERO;
-            }
-            return total;
+            return new PageResult(pageTotal, includedCount, readCursor(root));
         } catch (Exception ex) {
             throw new IllegalStateException("Failed parsing Loyverse response: " + ex.getMessage(), ex);
         }
@@ -133,11 +160,15 @@ public class LoyverseApiSalesProvider implements SalesProvider {
     }
 
     private BigDecimal extractGrossAmount(JsonNode receipt) {
+        BigDecimal fromLineItems = sumLineItemGross(receipt);
+        if (fromLineItems != null) {
+            return fromLineItems;
+        }
+
         String[] candidates = {
                 "gross_total_money",
                 "gross_total",
                 "gross_sales",
-                "total_money",
                 "total"
         };
 
@@ -159,6 +190,24 @@ public class LoyverseApiSalesProvider implements SalesProvider {
         }
 
         return BigDecimal.ZERO;
+    }
+
+    private BigDecimal sumLineItemGross(JsonNode receipt) {
+        JsonNode lineItems = receipt.get("line_items");
+        if (lineItems == null || !lineItems.isArray() || lineItems.isEmpty()) {
+            return null;
+        }
+
+        BigDecimal total = BigDecimal.ZERO;
+        boolean hasAtLeastOne = false;
+        for (JsonNode lineItem : lineItems) {
+            BigDecimal amount = parseMoneyNode(lineItem.get("gross_total_money"));
+            if (amount != null) {
+                total = total.add(amount);
+                hasAtLeastOne = true;
+            }
+        }
+        return hasAtLeastOne ? total : null;
     }
 
     private BigDecimal parseMoneyNode(JsonNode node) {
@@ -200,5 +249,37 @@ public class LoyverseApiSalesProvider implements SalesProvider {
 
     private String trim(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private boolean isRefundReceipt(JsonNode receipt) {
+        String type = trim(receipt.path("receipt_type").asText(""));
+        return "REFUND".equalsIgnoreCase(type);
+    }
+
+    private String readCursor(JsonNode root) {
+        if (root == null || root.isNull()) {
+            return "";
+        }
+        return trim(root.path("cursor").asText(""));
+    }
+
+    private String resolveNextUrl(String endpoint, String cursor) {
+        if (cursor == null || cursor.isBlank()) {
+            return "";
+        }
+        String separator = endpoint.contains("?") ? "&" : "?";
+        return endpoint + separator + "cursor=" + encodeValue(cursor);
+    }
+
+    private String encodeValue(String raw) {
+        String value = trim(raw);
+        if (value.isBlank()) {
+            return "";
+        }
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20");
+    }
+
+    private record PageResult(BigDecimal amount, int includedCount, String cursor) {
     }
 }
