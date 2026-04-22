@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -55,7 +56,7 @@ public class LoyverseApiSalesProvider implements SalesProvider {
             }
 
             String responseBody = restClient.get()
-                    .uri(nextUrl)
+                    .uri(URI.create(nextUrl))
                     .header("Authorization", "Bearer " + token)
                     .retrieve()
                     .body(String.class);

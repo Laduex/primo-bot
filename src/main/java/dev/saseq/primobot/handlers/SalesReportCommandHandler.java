@@ -11,6 +11,7 @@ import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import org.springframework.stereotype.Component;
@@ -284,23 +285,27 @@ public class SalesReportCommandHandler {
             }
         }
 
-        SalesReportExecutorService.DispatchResult result = schedulerService.runNow(event.getGuild(), overrideTargetId, selectedAccountId);
+        String finalOverrideTargetId = overrideTargetId;
+        String finalSelectedAccountId = selectedAccountId;
+        event.deferReply(true).queue(hook -> {
+            SalesReportExecutorService.DispatchResult result =
+                    schedulerService.runNow(event.getGuild(), finalOverrideTargetId, finalSelectedAccountId);
+            replyRunNowResult(hook, result);
+        });
+    }
+
+    private void replyRunNowResult(InteractionHook hook, SalesReportExecutorService.DispatchResult result) {
         switch (result.status()) {
-            case SENT -> event.reply("Sales report sent to <#%s>. Success: `%d`, Failed: `%d`."
+            case SENT -> hook.editOriginal("Sales report sent to <#%s>. Success: `%d`, Failed: `%d`."
                             .formatted(result.targetChannelId(), result.successCount(), result.failureCount()))
-                    .setEphemeral(true)
                     .queue();
-            case TARGET_NOT_CONFIGURED -> event.reply("No target channel configured. Run `/sales-report set-channel` or pass `target` in `/sales-report run-now`.")
-                    .setEphemeral(true)
+            case TARGET_NOT_CONFIGURED -> hook.editOriginal("No target channel configured. Run `/sales-report set-channel` or pass `target` in `/sales-report run-now`.")
                     .queue();
-            case TARGET_NOT_FOUND -> event.reply("Target channel `<#%s>` was not found.".formatted(result.targetChannelId()))
-                    .setEphemeral(true)
+            case TARGET_NOT_FOUND -> hook.editOriginal("Target channel `<#%s>` was not found.".formatted(result.targetChannelId()))
                     .queue();
-            case ACCOUNT_NOT_FOUND -> event.reply("No account found for id `%s`.".formatted(result.accountId()))
-                    .setEphemeral(true)
+            case ACCOUNT_NOT_FOUND -> hook.editOriginal("No account found for id `%s`.".formatted(result.accountId()))
                     .queue();
-            case GUILD_NOT_FOUND, SEND_FAILED -> event.reply("Failed to send sales report: " + result.message())
-                    .setEphemeral(true)
+            case GUILD_NOT_FOUND, SEND_FAILED -> hook.editOriginal("Failed to send sales report: " + result.message())
                     .queue();
         }
     }

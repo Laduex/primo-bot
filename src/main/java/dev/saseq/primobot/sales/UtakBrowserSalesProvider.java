@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -105,7 +106,7 @@ public class UtakBrowserSalesProvider implements SalesProvider {
                 + "&auth=" + encode(idToken);
 
         String body = restClient.get()
-                .uri(transactionsUrl)
+                .uri(URI.create(transactionsUrl))
                 .retrieve()
                 .body(String.class);
 

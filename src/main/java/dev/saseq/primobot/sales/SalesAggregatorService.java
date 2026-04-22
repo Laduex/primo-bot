@@ -1,6 +1,8 @@
 package dev.saseq.primobot.sales;
 
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,6 +16,7 @@ import java.util.Map;
 
 @Component
 public class SalesAggregatorService {
+    private static final Logger LOG = LoggerFactory.getLogger(SalesAggregatorService.class);
     private final Map<SalesPlatform, SalesProvider> providers = new EnumMap<>(SalesPlatform.class);
 
     public SalesAggregatorService(List<SalesProvider> salesProviders) {
@@ -70,6 +73,10 @@ public class SalesAggregatorService {
                     subtotals.put(platform, subtotals.getOrDefault(platform, BigDecimal.ZERO).add(result.amount()));
                 }
             } catch (Exception ex) {
+                LOG.warn("Sales fetch failed for account '{}' ({}) : {}",
+                        account.getName(),
+                        platform,
+                        ex.getMessage());
                 accountResults.add(SalesAccountResult.failure(account, platform, platform.getMetricLabel(), cleanError(ex.getMessage())));
             }
         }
