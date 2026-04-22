@@ -60,6 +60,10 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
         }
         if (PrimoCommands.COMMAND_SALES_REPORT.equals(event.getName())) {
             salesReportCommandHandler.handle(event);
+            return;
+        }
+        if (PrimoCommands.COMMAND_SALES.equals(event.getName())) {
+            salesReportCommandHandler.handle(event);
         }
     }
 
@@ -73,6 +77,15 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
         if (PrimoCommands.COMMAND_ORDER.equals(event.getName())
                 && PrimoCommands.ORDER_FORUM_OPTION.equals(event.getFocusedOption().getName())) {
             orderCommandHandler.handleForumAutocomplete(event);
+            return;
+        }
+
+        boolean salesCommand = PrimoCommands.COMMAND_SALES_REPORT.equals(event.getName())
+                || PrimoCommands.COMMAND_SALES.equals(event.getName());
+        if (salesCommand
+                && "run-now".equals(event.getSubcommandName())
+                && "account".equals(event.getFocusedOption().getName())) {
+            salesReportCommandHandler.handleRunNowAccountAutocomplete(event);
         }
     }
 

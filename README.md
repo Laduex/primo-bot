@@ -100,10 +100,10 @@ Admin-only command (Manage Server permission required).
 - `clear-times confirm:<true|false>`
 - `set-channel target:<text-channel>`
 - Run:
-- `run-now target:<optional text-or-forum-channel> scope:<optional all|single> account-id:<optional>`
+- `run-now target:<optional text-or-forum-channel> scope:<optional all|single> account:<optional>`
 - `target` overrides destination for this run only (does not persist)
-- `scope` defaults to `all`; if `account-id` is provided and `scope` is omitted, it runs as single-account
-- `account-id` is required when `scope:single`
+- `scope` defaults to `all`; if `account` is provided and `scope` is omitted, it runs as single-account
+- `account` is required when `scope:single` and supports autocomplete by account name
 - Accounts:
 - `list-accounts`
 - `add-account platform:<UTAK|LOYVERSE> name:<text> account-id:<optional> username:<optional> password:<optional> token:<optional> base-url:<optional> sales-url:<optional>`
@@ -119,6 +119,14 @@ Sales report behavior:
 - Loyverse metric: **Gross Sales Today** (today cumulative)
 - Friendly greeting buckets: `Good Morning`, `Good Afternoon`, `Good Evening`
 - Partial failures still post with per-account warnings
+
+## `/sales` command
+
+Admin-only shortcut command for sending reports immediately.
+
+- `run-now target:<text-or-forum-channel> scope:<all|single> account:<optional>`
+- If `scope:all`, report sends for all enabled accounts
+- If `scope:single`, pick account using autocomplete by name
 
 ## Run locally
 

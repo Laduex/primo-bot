@@ -34,11 +34,12 @@ public class PrimoBotConfig {
         CommandData completedCommand = PrimoCommands.buildCompletedSlashCommand();
         CommandData ordersReminderCommand = PrimoCommands.buildOrdersReminderSlashCommand();
         CommandData salesReportCommand = PrimoCommands.buildSalesReportSlashCommand();
+        CommandData salesCommand = PrimoCommands.buildSalesSlashCommand();
 
         if (defaultGuildId != null && !defaultGuildId.isBlank()) {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
-                syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand, salesReportCommand);
+                syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand, salesReportCommand, salesCommand);
                 deleteGlobalCommandsByName(jda, Set.of(
                         PrimoCommands.COMMAND_VAT,
                         PrimoCommands.COMMAND_ORDER,
@@ -46,6 +47,7 @@ public class PrimoBotConfig {
                         PrimoCommands.COMMAND_COMPLETED,
                         PrimoCommands.COMMAND_ORDERS_REMINDER,
                         PrimoCommands.COMMAND_SALES_REPORT,
+                        PrimoCommands.COMMAND_SALES,
                         "recipe",
                         "supplier",
                         "primo"
@@ -60,6 +62,7 @@ public class PrimoBotConfig {
         jda.upsertCommand(completedCommand).queue();
         jda.upsertCommand(ordersReminderCommand).queue();
         jda.upsertCommand(salesReportCommand).queue();
+        jda.upsertCommand(salesCommand).queue();
         deleteGlobalCommandsByName(jda, Set.of("recipe", "supplier", "primo"));
         return jda;
     }
@@ -74,13 +77,15 @@ public class PrimoBotConfig {
                                    CommandData orderRemindCommand,
                                    CommandData completedCommand,
                                    CommandData ordersReminderCommand,
-                                   CommandData salesReportCommand) {
+                                   CommandData salesReportCommand,
+                                   CommandData salesCommand) {
         guild.upsertCommand(vatCommand).queue();
         guild.upsertCommand(orderCommand).queue();
         guild.upsertCommand(orderRemindCommand).queue();
         guild.upsertCommand(completedCommand).queue();
         guild.upsertCommand(ordersReminderCommand).queue();
         guild.upsertCommand(salesReportCommand).queue();
+        guild.upsertCommand(salesCommand).queue();
         deleteGuildCommandsByName(guild, Set.of("recipe", "supplier", "primo"));
     }
 

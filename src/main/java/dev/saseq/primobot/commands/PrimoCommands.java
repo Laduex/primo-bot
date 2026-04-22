@@ -16,6 +16,7 @@ public final class PrimoCommands {
     public static final String COMMAND_COMPLETED = "completed";
     public static final String COMMAND_ORDERS_REMINDER = "orders-reminder";
     public static final String COMMAND_SALES_REPORT = "sales-report";
+    public static final String COMMAND_SALES = "sales";
 
     public static final String VAT_AMOUNT_OPTION = "amount";
     public static final String VAT_BASIS_OPTION = "basis";
@@ -119,7 +120,8 @@ public final class PrimoCommands {
                                         new OptionData(OptionType.STRING, "scope", "Run all accounts or a single account", false)
                                                 .addChoice("All Accounts", "all")
                                                 .addChoice("Single Account", "single"),
-                                        new OptionData(OptionType.STRING, "account-id", "Required when scope is Single Account", false)
+                                        new OptionData(OptionType.STRING, "account", "Select account when scope is Single Account", false)
+                                                .setAutoComplete(true)
                                 ),
                         new SubcommandData("list-accounts", "List configured sales accounts"),
                         new SubcommandData("add-account", "Add a sales account")
@@ -156,6 +158,23 @@ public final class PrimoCommands {
                                                 .addChoice("formal", "formal"),
                                         new OptionData(OptionType.STRING, "signature", "Message signature", false)
                                                 .setMaxLength(80)
+                                )
+                );
+    }
+
+    public static CommandData buildSalesSlashCommand() {
+        return Commands.slash(COMMAND_SALES, "Send sales reports now")
+                .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER))
+                .addSubcommands(
+                        new SubcommandData("run-now", "Send a sales report immediately")
+                                .addOptions(
+                                        new OptionData(OptionType.CHANNEL, "target", "Target channel (text or forum)", true)
+                                                .setChannelTypes(ChannelType.TEXT, ChannelType.FORUM),
+                                        new OptionData(OptionType.STRING, "scope", "Run all accounts or a single account", true)
+                                                .addChoice("All Accounts", "all")
+                                                .addChoice("Single Account", "single"),
+                                        new OptionData(OptionType.STRING, "account", "Select account when scope is Single Account", false)
+                                                .setAutoComplete(true)
                                 )
                 );
     }

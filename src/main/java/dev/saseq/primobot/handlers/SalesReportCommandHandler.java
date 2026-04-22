@@ -10,8 +10,10 @@ import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
+import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import org.springframework.stereotype.Component;
@@ -30,6 +32,7 @@ import java.util.regex.Pattern;
 
 @Component
 public class SalesReportCommandHandler {
+    private static final int DISCORD_AUTOCOMPLETE_MAX_CHOICES = 25;
     private static final Pattern SNOWFLAKE_PATTERN = Pattern.compile("\\d+");
     private static final DateTimeFormatter SLOT_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -51,7 +54,7 @@ public class SalesReportCommandHandler {
         }
 
         if (!hasManageServer(event.getMember())) {
-            event.reply("You need Manage Server permission to use `/sales-report`.")
+            event.reply("You need Manage Server permission to use sales commands.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -59,7 +62,7 @@ public class SalesReportCommandHandler {
 
         String subcommand = event.getSubcommandName();
         if (subcommand == null || subcommand.isBlank()) {
-            event.reply("Please choose a subcommand for `/sales-report`.")
+            event.reply("Please choose a sales subcommand.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -259,6 +262,27 @@ public class SalesReportCommandHandler {
                 .queue();
     }
 
+    public void handleRunNowAccountAutocomplete(CommandAutoCompleteInteractionEvent event) {
+        if (event.getGuild() == null || event.getMember() == null || !hasManageServer(event.getMember())) {
+            event.replyChoices(List.of()).queue();
+            return;
+        }
+
+        OptionMapping scopeOption = event.getOption("scope");
+        if (scopeOption != null) {
+            String scope = scopeOption.getAsString().trim().toLowerCase(Locale.ENGLISH);
+            if (!"single".equals(scope)) {
+                event.replyChoices(List.of()).queue();
+                return;
+            }
+        }
+
+        String query = event.getFocusedOption().getValue();
+        SalesReportConfig config = configStore.getSnapshot();
+        List<Command.Choice> choices = buildRunNowAccountChoices(config, query);
+        event.replyChoices(choices).queue();
+    }
+
     private void handleRunNow(SlashCommandInteractionEvent event) {
         String overrideTargetId = "";
         OptionMapping targetOption = event.getOption("target");
@@ -285,13 +309,16 @@ public class SalesReportCommandHandler {
             return;
         }
 
-        String providedAccountId = event.getOption("account-id", "", OptionMapping::getAsString).trim();
+        String providedAccountId = event.getOption("account", "", OptionMapping::getAsString).trim();
+        if (providedAccountId.isBlank()) {
+            providedAccountId = event.getOption("account-id", "", OptionMapping::getAsString).trim();
+        }
         if (scopeOption == null && !providedAccountId.isBlank()) {
             scope = "single";
         }
 
         if ("all".equals(scope) && !providedAccountId.isBlank()) {
-            event.reply("`account-id` is only used when `scope` is `Single Account`. Set `scope` to `Single Account` or remove `account-id`.")
+            event.reply("`account` is only used when `scope` is `Single Account`. Set `scope` to `Single Account` or clear `account`.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -301,7 +328,7 @@ public class SalesReportCommandHandler {
         if ("single".equals(scope)) {
             selectedAccountId = providedAccountId;
             if (selectedAccountId.isBlank()) {
-                event.reply("`account-id` is required when `scope` is Single Account. Run `/sales-report list-accounts` to view valid IDs.")
+                event.reply("`account` is required when `scope` is Single Account. Pick an account name from the list.")
                         .setEphemeral(true)
                         .queue();
                 return;
@@ -605,6 +632,45 @@ public class SalesReportCommandHandler {
                         .formatted(config.getMessageTone(), config.getSignature()))
                 .setEphemeral(true)
                 .queue();
+    }
+
+    private List<Command.Choice> buildRunNowAccountChoices(SalesReportConfig config, String rawQuery) {
+        if (config == null || config.getAccounts() == null || config.getAccounts().isEmpty()) {
+            return List.of();
+        }
+
+        String query = rawQuery == null ? "" : rawQuery.trim().toLowerCase(Locale.ENGLISH);
+        List<SalesAccountConfig> accounts = config.getAccounts().stream()
+                .filter(account -> account != null && account.getId() != null && !account.getId().isBlank())
+                .filter(SalesAccountConfig::isEnabled)
+                .sorted(Comparator.comparing(
+                        account -> account.getName() == null ? "" : account.getName(),
+                        String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        List<Command.Choice> choices = new ArrayList<>();
+        for (SalesAccountConfig account : accounts) {
+            if (choices.size() >= DISCORD_AUTOCOMPLETE_MAX_CHOICES) {
+                break;
+            }
+
+            String accountId = account.getId().trim();
+            String accountName = (account.getName() == null || account.getName().isBlank())
+                    ? accountId
+                    : account.getName().trim();
+            String platformName = account.resolvePlatform() == null
+                    ? "Unknown"
+                    : account.resolvePlatform().getDisplayName();
+            String display = "%s (%s)".formatted(accountName, platformName);
+
+            String searchable = (accountName + " " + accountId + " " + platformName).toLowerCase(Locale.ENGLISH);
+            if (!query.isBlank() && !searchable.contains(query)) {
+                continue;
+            }
+
+            choices.add(new Command.Choice(display, accountId));
+        }
+        return choices;
     }
 
     private LocalTime parseSlot(SlashCommandInteractionEvent event) {
