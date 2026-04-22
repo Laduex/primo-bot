@@ -4,6 +4,7 @@ import dev.saseq.primobot.handlers.CompletedCommandHandler;
 import dev.saseq.primobot.handlers.ForumAutoMentionHandler;
 import dev.saseq.primobot.handlers.OrderCommandHandler;
 import dev.saseq.primobot.handlers.OrdersReminderCommandHandler;
+import dev.saseq.primobot.handlers.SalesReportCommandHandler;
 import dev.saseq.primobot.handlers.VatCommandHandler;
 import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
@@ -18,17 +19,20 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
     private final OrderCommandHandler orderCommandHandler;
     private final CompletedCommandHandler completedCommandHandler;
     private final OrdersReminderCommandHandler ordersReminderCommandHandler;
+    private final SalesReportCommandHandler salesReportCommandHandler;
     private final ForumAutoMentionHandler forumAutoMentionHandler;
 
     public PrimoSlashCommandListener(VatCommandHandler vatCommandHandler,
                                      OrderCommandHandler orderCommandHandler,
                                      CompletedCommandHandler completedCommandHandler,
                                      OrdersReminderCommandHandler ordersReminderCommandHandler,
+                                     SalesReportCommandHandler salesReportCommandHandler,
                                      ForumAutoMentionHandler forumAutoMentionHandler) {
         this.vatCommandHandler = vatCommandHandler;
         this.orderCommandHandler = orderCommandHandler;
         this.completedCommandHandler = completedCommandHandler;
         this.ordersReminderCommandHandler = ordersReminderCommandHandler;
+        this.salesReportCommandHandler = salesReportCommandHandler;
         this.forumAutoMentionHandler = forumAutoMentionHandler;
     }
 
@@ -52,6 +56,10 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
         }
         if (PrimoCommands.COMMAND_ORDERS_REMINDER.equals(event.getName())) {
             ordersReminderCommandHandler.handle(event);
+            return;
+        }
+        if (PrimoCommands.COMMAND_SALES_REPORT.equals(event.getName())) {
+            salesReportCommandHandler.handle(event);
         }
     }
 

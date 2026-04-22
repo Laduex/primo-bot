@@ -11,6 +11,7 @@ Standalone Discord bot service for Primo operations slash commands.
 - `/orders-reminder` admin command for daily open-order reminders
 - `/order-remind` admin command to manually send a reminder now for one configured forum route
 - Daily branch reminders for unarchived order threads with friendly greeting and wiki-style links
+- `/sales-report` admin command for scheduled multi-account UTAK and Loyverse sales broadcasts
 - Guild-specific command registration support via `DISCORD_GUILD_ID`
 - Health endpoint on port `8086`
 
@@ -42,11 +43,22 @@ Orders reminder variables (all optional):
 - `ORDER_REMINDER_DEFAULT_TIMEZONE` (default: `Asia/Manila`)
 - `ORDER_REMINDER_DEFAULT_ROUTES` (format: `forumId:channelId:roleId;...`)
 
+Sales report variables (all optional bootstrap defaults):
+
+- `SALES_REPORT_CONFIG_PATH` (default: `/data/sales-report-config.json`)
+- `SALES_REPORT_DEFAULT_ENABLED` (default: `true`)
+- `SALES_REPORT_DEFAULT_TIMEZONE` (default: `Asia/Manila`)
+- `SALES_REPORT_DEFAULT_TIMES` (default: `09:00,12:00,15:00,18:00,21:00`)
+- `SALES_REPORT_DEFAULT_TARGET_CHANNEL_ID` (default: empty)
+- `SALES_REPORT_DEFAULT_TONE` (default: `casual`)
+- `SALES_REPORT_DEFAULT_SIGNATURE` (default: `Thanks, Primo`)
+
 Example:
 
 ```dotenv
 FORUM_AUTO_MENTION_TARGETS=1345768901234567890:123456789012345678,223456789012345678;1456789012345678901:323456789012345678
 ORDER_REMINDER_DEFAULT_ROUTES=1494503996357087443:1494175620287041536:1494215754084651089;1495586918589661384:1494175557208899736:1494215769347854356
+SALES_REPORT_DEFAULT_TIMES=09:00,12:00,15:00,18:00,21:00
 ```
 
 ## `/orders-reminder` command
@@ -74,6 +86,37 @@ Reminder behavior:
 - Includes only unarchived forum posts
 - Skips channels with no open orders
 - Greeting buckets: `Good Morning`, `Good Afternoon`, `Good Evening`
+
+## `/sales-report` command
+
+Admin-only command (Manage Server permission required).
+
+- Schedule and channel:
+- `status`
+- `set-enabled enabled:<true|false>`
+- `set-timezone timezone:<IANA timezone>`
+- `add-time hour:<0-23> minute:<0-59>`
+- `remove-time hour:<0-23> minute:<0-59>`
+- `clear-times confirm:<true|false>`
+- `set-channel target:<text-channel>`
+- Run:
+- `run-now target:<optional text-channel>`
+- `target` overrides destination for this run only (does not persist)
+- Accounts:
+- `list-accounts`
+- `add-account platform:<UTAK|LOYVERSE> name:<text> account-id:<optional> username:<optional> password:<optional> token:<optional> base-url:<optional> sales-url:<optional>`
+- `update-account account-id:<text> ...`
+- `remove-account account-id:<text>`
+- `set-account-enabled account-id:<text> enabled:<true|false>`
+- Copy:
+- `set-copy tone:<casual|formal> signature:<text>`
+
+Sales report behavior:
+
+- UTAK metric: **Total Net Sales** (today cumulative)
+- Loyverse metric: **Gross Sales Today** (today cumulative)
+- Friendly greeting buckets: `Good Morning`, `Good Afternoon`, `Good Evening`
+- Partial failures still post with per-account warnings
 
 ## Run locally
 

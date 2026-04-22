@@ -12,5 +12,6 @@ COPY --from=build /app/target/primo-bot-1.0.0.jar app.jar
 ENV DISCORD_TOKEN=""
 ENV DISCORD_GUILD_ID=""
 ENV ORDER_REMINDER_CONFIG_PATH="/data/orders-reminder-config.json"
+ENV SALES_REPORT_CONFIG_PATH="/data/sales-report-config.json"
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

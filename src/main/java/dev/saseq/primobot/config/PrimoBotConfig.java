@@ -28,22 +28,24 @@ public class PrimoBotConfig {
                 .build()
                 .awaitReady();
 
-        var vatCommand = PrimoCommands.buildVatSlashCommand();
-        var orderCommand = PrimoCommands.buildOrderSlashCommand();
-        var orderRemindCommand = PrimoCommands.buildOrderRemindSlashCommand();
-        var completedCommand = PrimoCommands.buildCompletedSlashCommand();
-        var ordersReminderCommand = PrimoCommands.buildOrdersReminderSlashCommand();
+        CommandData vatCommand = PrimoCommands.buildVatSlashCommand();
+        CommandData orderCommand = PrimoCommands.buildOrderSlashCommand();
+        CommandData orderRemindCommand = PrimoCommands.buildOrderRemindSlashCommand();
+        CommandData completedCommand = PrimoCommands.buildCompletedSlashCommand();
+        CommandData ordersReminderCommand = PrimoCommands.buildOrdersReminderSlashCommand();
+        CommandData salesReportCommand = PrimoCommands.buildSalesReportSlashCommand();
 
         if (defaultGuildId != null && !defaultGuildId.isBlank()) {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
-                syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand);
+                syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand, salesReportCommand);
                 deleteGlobalCommandsByName(jda, Set.of(
                         PrimoCommands.COMMAND_VAT,
                         PrimoCommands.COMMAND_ORDER,
                         PrimoCommands.COMMAND_ORDER_REMIND,
                         PrimoCommands.COMMAND_COMPLETED,
                         PrimoCommands.COMMAND_ORDERS_REMINDER,
+                        PrimoCommands.COMMAND_SALES_REPORT,
                         "recipe",
                         "supplier",
                         "primo"
@@ -57,6 +59,7 @@ public class PrimoBotConfig {
         jda.upsertCommand(orderRemindCommand).queue();
         jda.upsertCommand(completedCommand).queue();
         jda.upsertCommand(ordersReminderCommand).queue();
+        jda.upsertCommand(salesReportCommand).queue();
         deleteGlobalCommandsByName(jda, Set.of("recipe", "supplier", "primo"));
         return jda;
     }
@@ -70,12 +73,14 @@ public class PrimoBotConfig {
                                    CommandData orderCommand,
                                    CommandData orderRemindCommand,
                                    CommandData completedCommand,
-                                   CommandData ordersReminderCommand) {
+                                   CommandData ordersReminderCommand,
+                                   CommandData salesReportCommand) {
         guild.upsertCommand(vatCommand).queue();
         guild.upsertCommand(orderCommand).queue();
         guild.upsertCommand(orderRemindCommand).queue();
         guild.upsertCommand(completedCommand).queue();
         guild.upsertCommand(ordersReminderCommand).queue();
+        guild.upsertCommand(salesReportCommand).queue();
         deleteGuildCommandsByName(guild, Set.of("recipe", "supplier", "primo"));
     }
 
