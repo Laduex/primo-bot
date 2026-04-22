@@ -10,6 +10,9 @@ import java.net.URI;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -18,6 +21,7 @@ import java.util.Locale;
 @Component
 public class LoyverseApiSalesProvider implements SalesProvider {
     private static final String DEFAULT_RECEIPTS_URL = "https://api.loyverse.com/v1.0/receipts";
+    private static final DateTimeFormatter LOYVERSE_DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     private final RestClient restClient = RestClient.create();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -44,7 +48,8 @@ public class LoyverseApiSalesProvider implements SalesProvider {
     }
 
     private BigDecimal fetchGrossSalesForDate(String token, String endpoint, LocalDate reportDate, ZoneId zoneId) {
-        String nextUrl = endpoint;
+        String filteredEndpoint = buildDateFilteredEndpoint(endpoint, reportDate, zoneId);
+        String nextUrl = filteredEndpoint;
         int page = 0;
         BigDecimal total = BigDecimal.ZERO;
         boolean hasAnyIncluded = false;
@@ -70,13 +75,27 @@ public class LoyverseApiSalesProvider implements SalesProvider {
             if (pageResult.includedCount() > 0) {
                 hasAnyIncluded = true;
             }
-            nextUrl = resolveNextUrl(endpoint, pageResult.cursor());
+            nextUrl = resolveNextUrl(filteredEndpoint, pageResult.cursor());
         }
 
         if (!hasAnyIncluded) {
             return BigDecimal.ZERO;
         }
         return total;
+    }
+
+    private String buildDateFilteredEndpoint(String endpoint, LocalDate reportDate, ZoneId zoneId) {
+        ZonedDateTime startLocal = reportDate.atStartOfDay(zoneId);
+        ZonedDateTime endLocal = reportDate.plusDays(1).atStartOfDay(zoneId).minusSeconds(1);
+
+        String createdAtMin = startLocal.withZoneSameInstant(ZoneOffset.UTC).format(LOYVERSE_DATETIME_FORMATTER);
+        String createdAtMax = endLocal.withZoneSameInstant(ZoneOffset.UTC).format(LOYVERSE_DATETIME_FORMATTER);
+
+        String separator = endpoint.contains("?") ? "&" : "?";
+        return endpoint
+                + separator
+                + "created_at_min=" + createdAtMin
+                + "&created_at_max=" + createdAtMax;
     }
 
     private PageResult parseGrossSalesPageForDate(String rawJson, LocalDate reportDate, ZoneId zoneId) {
