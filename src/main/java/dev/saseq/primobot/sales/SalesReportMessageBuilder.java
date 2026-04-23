@@ -68,7 +68,9 @@ public class SalesReportMessageBuilder {
                     .append(formatPhp(result.amount()))
                     .append("`\n");
 
-            appendTopSkuSection(content, result.skuSales());
+            if (dailyOverview) {
+                appendTopSkuSection(content, result.skuSales());
+            }
         }
 
         if (!hasSuccess) {

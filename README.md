@@ -118,9 +118,9 @@ Sales report behavior:
 
 - UTAK metric: **Total Net Sales** (today cumulative)
 - Loyverse metric: **Gross Sales Today** (today cumulative)
-- Adds per-account **Top 10 Sold SKU (PHP)** when SKU/item-level data is available
-- Sales updates run on the configured update times
+- Sales updates run on the configured update times and include account totals only
 - Daily overview runs once on the configured summary time
+- Daily overview adds per-account **Top 10 Sold SKU (PHP)** when SKU/item-level data is available
 - Manual `run-now` sends a sales update format
 - Friendly greeting buckets: `Good Morning`, `Good Afternoon`, `Good Evening`
 - Partial failures still post with per-account warnings

@@ -63,9 +63,9 @@ class SalesReportMessageBuilderTest {
         String message = builder.buildMessage(snapshot, "casual", "Thanks, Primo", false);
         assertTrue(message.contains("Good Morning, team! Here's your sales update."));
         assertTrue(message.contains("- **UTAK Main**: `PHP 1,000.50`"));
-        assertTrue(message.contains("Top 10 Sold SKU (PHP):"));
-        assertTrue(message.contains("1. 12oz Hot Latte (Cafe): `PHP 660.00`"));
-        assertTrue(message.contains("2. Roasted Tomato & Cheese Bagel (Cafe): `PHP 500.00`"));
+        assertTrue(!message.contains("Top 10 Sold SKU (PHP):"));
+        assertTrue(!message.contains("12oz Hot Latte (Cafe): `PHP 660.00`"));
+        assertTrue(!message.contains("Roasted Tomato & Cheese Bagel (Cafe): `PHP 500.00`"));
         assertTrue(message.contains("**Grand Total:** `PHP 1,000.50`"));
         assertTrue(!message.contains("Subtotal:"));
         assertTrue(!message.contains("UTAK Net + Loyverse Gross"));
@@ -110,6 +110,7 @@ class SalesReportMessageBuilderTest {
 
         String message = builder.buildMessage(snapshot, "formal", "Thanks, Primo", true);
         assertTrue(message.contains("Good Evening, team. Here is today's daily sales overview."));
+        assertTrue(message.contains("Top 10 Sold SKU (PHP):"));
         assertTrue(message.contains("10. SKU 10: `PHP 910.00`"));
         assertTrue(!message.contains("11. SKU 11"));
     }
