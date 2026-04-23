@@ -31,9 +31,9 @@ public class SalesReportMessageBuilder {
 
         StringBuilder content = new StringBuilder();
         if (casual) {
-            content.append(greeting).append(", team! Here's your sales pulse for today so far.\n\n");
+            content.append(greeting).append(", team! Here's your daily sales overview.\n\n");
         } else {
-            content.append(greeting).append(", team. Here is today's cumulative sales update.\n\n");
+            content.append(greeting).append(", team. Here is today's daily sales overview.\n\n");
         }
 
         List<SalesAccountResult> results = snapshot.accountResults() == null
