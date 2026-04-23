@@ -1,6 +1,7 @@
 package dev.saseq.primobot.sales;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record SalesAccountResult(String accountId,
                                  String accountName,
@@ -8,12 +9,21 @@ public record SalesAccountResult(String accountId,
                                  String metricLabel,
                                  BigDecimal amount,
                                  boolean success,
-                                 String errorMessage) {
+                                 String errorMessage,
+                                 List<SkuSalesEntry> skuSales) {
 
     public static SalesAccountResult success(SalesAccountConfig account,
                                              SalesPlatform platform,
                                              String metricLabel,
                                              BigDecimal amount) {
+        return success(account, platform, metricLabel, amount, List.of());
+    }
+
+    public static SalesAccountResult success(SalesAccountConfig account,
+                                             SalesPlatform platform,
+                                             String metricLabel,
+                                             BigDecimal amount,
+                                             List<SkuSalesEntry> skuSales) {
         return new SalesAccountResult(
                 account == null ? "" : account.getId(),
                 account == null ? "Unknown" : account.getName(),
@@ -21,7 +31,8 @@ public record SalesAccountResult(String accountId,
                 metricLabel,
                 amount == null ? BigDecimal.ZERO : amount,
                 true,
-                null
+                null,
+                skuSales == null ? List.of() : List.copyOf(skuSales)
         );
     }
 
@@ -36,7 +47,8 @@ public record SalesAccountResult(String accountId,
                 metricLabel,
                 BigDecimal.ZERO,
                 false,
-                errorMessage == null ? "Unknown error" : errorMessage
+                errorMessage == null ? "Unknown error" : errorMessage,
+                List.of()
         );
     }
 }

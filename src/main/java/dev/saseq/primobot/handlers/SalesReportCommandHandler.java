@@ -9,7 +9,6 @@ import dev.saseq.primobot.sales.SalesReportSchedulerService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
@@ -75,6 +74,7 @@ public class SalesReportCommandHandler {
             case "add-time" -> handleAddTime(event);
             case "remove-time" -> handleRemoveTime(event);
             case "clear-times" -> handleClearTimes(event);
+            case "set-summary" -> handleSetSummary(event);
             case "set-channel" -> handleSetChannel(event);
             case "run-now" -> handleRunNow(event);
             case "list-accounts" -> handleListAccounts(event);
@@ -245,19 +245,62 @@ public class SalesReportCommandHandler {
     private void handleSetChannel(SlashCommandInteractionEvent event) {
         OptionMapping targetOption = event.getOption("target");
         if (targetOption == null || targetOption.getType() != OptionType.CHANNEL
-                || targetOption.getAsChannel().getType() != ChannelType.TEXT) {
-            event.reply("`target` must be a text channel.")
+                || (targetOption.getAsChannel().getType() != ChannelType.TEXT
+                && targetOption.getAsChannel().getType() != ChannelType.FORUM)) {
+            event.reply("`target` must be a text or forum channel.")
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
-        TextChannel target = targetOption.getAsChannel().asTextChannel();
         SalesReportConfig config = configStore.getSnapshot();
-        config.setTargetChannelId(target.getId());
+        config.setTargetChannelId(targetOption.getAsChannel().getId());
         configStore.replaceAndPersist(config);
 
-        event.reply("Sales report channel set to %s.".formatted(target.getAsMention()))
+        event.reply("Sales report channel set to %s.".formatted(targetOption.getAsChannel().getAsMention()))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void handleSetSummary(SlashCommandInteractionEvent event) {
+        OptionMapping targetOption = event.getOption("target");
+        if (targetOption == null || targetOption.getType() != OptionType.CHANNEL
+                || (targetOption.getAsChannel().getType() != ChannelType.TEXT
+                && targetOption.getAsChannel().getType() != ChannelType.FORUM)) {
+            event.reply("`target` must be a text or forum channel.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        LocalTime slot = parseSlot(event);
+        if (slot == null) {
+            return;
+        }
+
+        String timezone = event.getOption("timezone", "", OptionMapping::getAsString).trim();
+        if (!timezone.isBlank() && !isValidTimezone(timezone)) {
+            event.reply("Invalid timezone. Use an IANA value like `Asia/Manila`.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        SalesReportConfig config = configStore.getSnapshot();
+        String formatted = slot.format(SLOT_FORMATTER);
+        config.setTargetChannelId(targetOption.getAsChannel().getId());
+        config.setTimes(new ArrayList<>(List.of(formatted)));
+        config.setLastRunDateBySlot(new java.util.LinkedHashMap<>());
+        if (!timezone.isBlank()) {
+            config.setTimezone(timezone);
+        }
+        configStore.replaceAndPersist(config);
+
+        event.reply("Sales overview set to %s at `%s` (%s)."
+                        .formatted(
+                                targetOption.getAsChannel().getAsMention(),
+                                formatted,
+                                config.getTimezone()))
                 .setEphemeral(true)
                 .queue();
     }

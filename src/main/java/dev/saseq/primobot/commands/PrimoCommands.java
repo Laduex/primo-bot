@@ -110,9 +110,17 @@ public final class PrimoCommands {
                                 .addOption(OptionType.INTEGER, "minute", "Minute (0-59)", true),
                         new SubcommandData("clear-times", "Clear all schedule times")
                                 .addOption(OptionType.BOOLEAN, "confirm", "Set true to confirm", true),
+                        new SubcommandData("set-summary", "Set broadcast channel and daily schedule time")
+                                .addOptions(
+                                        new OptionData(OptionType.CHANNEL, "target", "Target channel (text or forum)", true)
+                                                .setChannelTypes(ChannelType.TEXT, ChannelType.FORUM),
+                                        new OptionData(OptionType.INTEGER, "hour", "Hour (0-23)", true),
+                                        new OptionData(OptionType.INTEGER, "minute", "Minute (0-59)", true),
+                                        new OptionData(OptionType.STRING, "timezone", "Optional IANA timezone override", false)
+                                ),
                         new SubcommandData("set-channel", "Set default target channel for scheduled reports")
-                                .addOptions(new OptionData(OptionType.CHANNEL, "target", "Target text channel", true)
-                                        .setChannelTypes(ChannelType.TEXT)),
+                                .addOptions(new OptionData(OptionType.CHANNEL, "target", "Target channel (text or forum)", true)
+                                        .setChannelTypes(ChannelType.TEXT, ChannelType.FORUM)),
                         new SubcommandData("run-now", "Send a sales report immediately")
                                 .addOptions(
                                         new OptionData(OptionType.CHANNEL, "target", "Optional one-time target override (text or forum)", false)

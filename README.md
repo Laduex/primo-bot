@@ -98,7 +98,8 @@ Admin-only command (Manage Server permission required).
 - `add-time hour:<0-23> minute:<0-59>`
 - `remove-time hour:<0-23> minute:<0-59>`
 - `clear-times confirm:<true|false>`
-- `set-channel target:<text-channel>`
+- `set-summary target:<text-or-forum-channel> hour:<0-23> minute:<0-59> timezone:<optional>`
+- `set-channel target:<text-or-forum-channel>`
 - Run:
 - `run-now target:<optional text-or-forum-channel> scope:<optional all|single> account:<optional>`
 - `target` overrides destination for this run only (does not persist)
@@ -117,6 +118,8 @@ Sales report behavior:
 
 - UTAK metric: **Total Net Sales** (today cumulative)
 - Loyverse metric: **Gross Sales Today** (today cumulative)
+- Adds per-account **Top 10 Sold SKU (PHP)** when SKU/item-level data is available
+- Scheduled overview and manual `run-now` use the same report format
 - Friendly greeting buckets: `Good Morning`, `Good Afternoon`, `Good Evening`
 - Partial failures still post with per-account warnings
 

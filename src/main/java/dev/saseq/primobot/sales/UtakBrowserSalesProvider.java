@@ -12,7 +12,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Component
@@ -50,9 +54,14 @@ public class UtakBrowserSalesProvider implements SalesProvider {
                     context.reportDate(),
                     context.zoneId()
             );
-            BigDecimal totalNetSales = sumTotalNetSalesFromTransactionsJson(transactionsJson);
+            TransactionAggregation aggregation = aggregateSalesFromTransactionsJson(transactionsJson);
 
-            return SalesAccountResult.success(account, SalesPlatform.UTAK, SalesPlatform.UTAK.getMetricLabel(), totalNetSales);
+            return SalesAccountResult.success(
+                    account,
+                    SalesPlatform.UTAK,
+                    SalesPlatform.UTAK.getMetricLabel(),
+                    aggregation.totalNetSales(),
+                    aggregation.skuSales());
         } catch (Exception ex) {
             throw new IllegalStateException("Failed UTAK fetch for account '%s': %s"
                     .formatted(account.getName(), ex.getMessage()), ex);
@@ -114,17 +123,22 @@ public class UtakBrowserSalesProvider implements SalesProvider {
     }
 
     static BigDecimal sumTotalNetSalesFromTransactionsJson(String transactionsJson) throws Exception {
+        return aggregateSalesFromTransactionsJson(transactionsJson).totalNetSales();
+    }
+
+    static TransactionAggregation aggregateSalesFromTransactionsJson(String transactionsJson) throws Exception {
         if (transactionsJson == null || transactionsJson.isBlank() || "null".equalsIgnoreCase(transactionsJson.trim())) {
-            return BigDecimal.ZERO;
+            return new TransactionAggregation(BigDecimal.ZERO, List.of());
         }
 
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(transactionsJson);
         if (root == null || root.isNull() || !root.isObject()) {
-            return BigDecimal.ZERO;
+            return new TransactionAggregation(BigDecimal.ZERO, List.of());
         }
 
         BigDecimal total = BigDecimal.ZERO;
+        Map<String, ItemAccumulator> skuTotals = new LinkedHashMap<>();
         Iterator<Map.Entry<String, JsonNode>> entries = root.fields();
         while (entries.hasNext()) {
             Map.Entry<String, JsonNode> entry = entries.next();
@@ -141,9 +155,11 @@ public class UtakBrowserSalesProvider implements SalesProvider {
             if (amount != null) {
                 total = total.add(amount);
             }
+
+            accumulateItemSales(transaction.get("items"), skuTotals);
         }
 
-        return total;
+        return new TransactionAggregation(total, toSkuSalesEntries(skuTotals));
     }
 
     private static BigDecimal parseAmount(JsonNode node) {
@@ -165,6 +181,136 @@ public class UtakBrowserSalesProvider implements SalesProvider {
             }
         }
         return null;
+    }
+
+    private static void accumulateItemSales(JsonNode itemsNode, Map<String, ItemAccumulator> skuTotals) {
+        if (itemsNode == null || itemsNode.isNull() || !itemsNode.isArray() || itemsNode.isEmpty()) {
+            return;
+        }
+
+        for (JsonNode item : itemsNode) {
+            if (item == null || item.isNull() || !item.isObject()) {
+                continue;
+            }
+
+            String baseSku = firstNonBlank(readText(item, "id"), readText(item, "title"));
+            if (baseSku.isBlank()) {
+                continue;
+            }
+
+            String option = readText(item, "option");
+            String displayName = buildDisplayName(
+                    firstNonBlank(readText(item, "title"), baseSku),
+                    option);
+            String skuKey = option.isBlank() ? baseSku : baseSku + "::" + option;
+
+            BigDecimal lineAmount = resolveItemAmount(item);
+            if (lineAmount == null) {
+                continue;
+            }
+
+            String normalizedKey = normalizeKey(skuKey);
+            ItemAccumulator current = skuTotals.get(normalizedKey);
+            if (current == null) {
+                skuTotals.put(normalizedKey, new ItemAccumulator(skuKey, displayName, lineAmount));
+                continue;
+            }
+
+            String preferredName = preferDisplayName(current.displayName(), displayName, current.skuKey());
+            skuTotals.put(normalizedKey, new ItemAccumulator(current.skuKey(), preferredName, current.amount().add(lineAmount)));
+        }
+    }
+
+    private static BigDecimal resolveItemAmount(JsonNode item) {
+        String[] amountFields = {"amount", "line_total", "gross_total", "total"};
+        for (String field : amountFields) {
+            BigDecimal direct = parseAmount(item.get(field));
+            if (direct != null) {
+                return direct;
+            }
+        }
+
+        BigDecimal price = parseAmount(item.get("price"));
+        BigDecimal quantity = parseAmount(item.get("quantity"));
+        if (price == null || quantity == null) {
+            return null;
+        }
+        return price.multiply(quantity);
+    }
+
+    private static List<SkuSalesEntry> toSkuSalesEntries(Map<String, ItemAccumulator> skuTotals) {
+        if (skuTotals == null || skuTotals.isEmpty()) {
+            return List.of();
+        }
+
+        List<SkuSalesEntry> entries = new ArrayList<>();
+        for (ItemAccumulator value : skuTotals.values()) {
+            if (value == null || value.skuKey().isBlank()) {
+                continue;
+            }
+            entries.add(new SkuSalesEntry(
+                    value.skuKey(),
+                    preferDisplayName("", value.displayName(), value.skuKey()),
+                    value.amount() == null ? BigDecimal.ZERO : value.amount()
+            ));
+        }
+        return entries;
+    }
+
+    private static String readText(JsonNode node, String fieldName) {
+        if (node == null || fieldName == null || fieldName.isBlank()) {
+            return "";
+        }
+        JsonNode value = node.get(fieldName);
+        if (value == null || value.isNull()) {
+            return "";
+        }
+        return value.asText("").trim();
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null || values.length == 0) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
+    private static String buildDisplayName(String title, String option) {
+        String safeTitle = title == null ? "" : title.trim();
+        String safeOption = option == null ? "" : option.trim();
+        if (safeOption.isBlank()) {
+            return safeTitle;
+        }
+        return safeTitle + " (" + safeOption + ")";
+    }
+
+    private static String normalizeKey(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.trim().toLowerCase(Locale.ENGLISH);
+    }
+
+    private static String preferDisplayName(String current, String candidate, String skuKeyFallback) {
+        String safeCurrent = current == null ? "" : current.trim();
+        String safeCandidate = candidate == null ? "" : candidate.trim();
+        String safeSkuKey = skuKeyFallback == null ? "" : skuKeyFallback.trim();
+
+        if (safeCurrent.isBlank()) {
+            return safeCandidate.isBlank() ? safeSkuKey : safeCandidate;
+        }
+        if (safeCandidate.isBlank()) {
+            return safeCurrent;
+        }
+        if (safeCurrent.equalsIgnoreCase(safeSkuKey) && !safeCandidate.equalsIgnoreCase(safeSkuKey)) {
+            return safeCandidate;
+        }
+        return safeCurrent;
     }
 
     private String resolveFirebaseApiKey() {
@@ -218,5 +364,11 @@ public class UtakBrowserSalesProvider implements SalesProvider {
     }
 
     private record AuthSession(String uid, String idToken) {
+    }
+
+    record TransactionAggregation(BigDecimal totalNetSales, List<SkuSalesEntry> skuSales) {
+    }
+
+    private record ItemAccumulator(String skuKey, String displayName, BigDecimal amount) {
     }
 }

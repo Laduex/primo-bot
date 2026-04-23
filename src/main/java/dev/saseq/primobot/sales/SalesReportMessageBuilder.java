@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 @Component
 public class SalesReportMessageBuilder {
@@ -58,6 +59,8 @@ public class SalesReportMessageBuilder {
                     .append("**: `")
                     .append(formatPhp(result.amount()))
                     .append("`\n");
+
+            appendTopSkuSection(content, result.skuSales());
         }
 
         if (!hasSuccess) {
@@ -99,6 +102,37 @@ public class SalesReportMessageBuilder {
         }
     }
 
+    private void appendTopSkuSection(StringBuilder content, List<SkuSalesEntry> skuSales) {
+        if (skuSales == null || skuSales.isEmpty()) {
+            return;
+        }
+
+        List<SkuSalesEntry> ranked = new ArrayList<>(skuSales);
+        ranked.sort(Comparator
+                .comparing((SkuSalesEntry entry) -> safeAmount(entry).negate())
+                .thenComparing(entry -> safeDisplayName(entry).toLowerCase(Locale.ENGLISH))
+                .thenComparing(entry -> safeSkuKey(entry).toLowerCase(Locale.ENGLISH)));
+
+        List<SkuSalesEntry> top = ranked.stream()
+                .limit(10)
+                .toList();
+        if (top.isEmpty()) {
+            return;
+        }
+
+        content.append("  Top 10 Sold SKU (PHP):\n");
+        int rank = 1;
+        for (SkuSalesEntry entry : top) {
+            content.append("  ")
+                    .append(rank++)
+                    .append(". ")
+                    .append(escapeMarkdown(safeDisplayName(entry)))
+                    .append(": `")
+                    .append(formatPhp(safeAmount(entry)))
+                    .append("`\n");
+        }
+    }
+
     private String formatPhp(BigDecimal value) {
         BigDecimal safe = value == null ? BigDecimal.ZERO : value;
         return "PHP " + PHP_DECIMAL_FORMAT.format(safe);
@@ -109,6 +143,32 @@ public class SalesReportMessageBuilder {
             return "Unnamed Account";
         }
         return value.replace("`", "'").replace("*", "");
+    }
+
+    private BigDecimal safeAmount(SkuSalesEntry entry) {
+        if (entry == null || entry.salesAmount() == null) {
+            return BigDecimal.ZERO;
+        }
+        return entry.salesAmount();
+    }
+
+    private String safeDisplayName(SkuSalesEntry entry) {
+        if (entry == null) {
+            return "Unknown SKU";
+        }
+        String display = entry.displayName() == null ? "" : entry.displayName().trim();
+        if (!display.isBlank()) {
+            return display;
+        }
+        String skuKey = safeSkuKey(entry);
+        return skuKey.isBlank() ? "Unknown SKU" : skuKey;
+    }
+
+    private String safeSkuKey(SkuSalesEntry entry) {
+        if (entry == null || entry.skuKey() == null) {
+            return "";
+        }
+        return entry.skuKey().trim();
     }
 
 }
