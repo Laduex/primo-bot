@@ -89,8 +89,10 @@ public class SalesReportCommandHandler {
 
     private void handleStatus(SlashCommandInteractionEvent event) {
         SalesReportConfig config = configStore.getSnapshot();
-        String timesText = config.getTimes().isEmpty() ? "(none)" : String.join(", ", config.getTimes());
-        String targetChannel = config.getTargetChannelId().isBlank() ? "(not set)" : "<#" + config.getTargetChannelId() + ">";
+        String updateTimesText = config.getTimes().isEmpty() ? "(none)" : String.join(", ", config.getTimes());
+        String overviewTimeText = isBlank(config.getOverviewTime()) ? "(not set)" : config.getOverviewTime();
+        String updateTargetChannel = formatChannelMention(config.getTargetChannelId());
+        String overviewTargetChannel = formatChannelMention(config.getOverviewTargetChannelId());
 
         String accounts = config.getAccounts().isEmpty()
                 ? "(none)"
@@ -109,22 +111,28 @@ public class SalesReportCommandHandler {
                 **Sales Report Settings**
                 Enabled: `%s`
                 Timezone: `%s`
-                Times: `%s`
-                Target Channel: %s
+                Sales Update Times: `%s`
+                Daily Overview Time: `%s`
+                Sales Update Channel: %s
+                Daily Overview Channel: %s
                 Tone: `%s`
                 Signature: `%s`
-                Next Run: `%s`
+                Next Sales Update: `%s`
+                Next Daily Overview: `%s`
 
                 **Accounts**
                 %s
                 """.formatted(
                 config.isEnabled(),
                 config.getTimezone(),
-                timesText,
-                targetChannel,
+                updateTimesText,
+                overviewTimeText,
+                updateTargetChannel,
+                overviewTargetChannel,
                 config.getMessageTone(),
                 config.getSignature(),
-                describeNextRun(config),
+                describeNextScheduledRun(config.getTimes(), config.getTimezone()),
+                describeNextOverview(config),
                 accounts
         );
 
@@ -180,7 +188,7 @@ public class SalesReportCommandHandler {
         SalesReportConfig config = configStore.getSnapshot();
         String formatted = slot.format(SLOT_FORMATTER);
         if (config.getTimes().contains(formatted)) {
-            event.reply("Time `%s` is already in the schedule.".formatted(formatted))
+            event.reply("Time `%s` is already in the sales update schedule.".formatted(formatted))
                     .setEphemeral(true)
                     .queue();
             return;
@@ -192,7 +200,7 @@ public class SalesReportCommandHandler {
         config.setTimes(updated);
         configStore.replaceAndPersist(config);
 
-        event.reply("Added `%s` to sales report schedule.".formatted(formatted))
+        event.reply("Added `%s` to sales update schedule.".formatted(formatted))
                 .setEphemeral(true)
                 .queue();
     }
@@ -206,7 +214,7 @@ public class SalesReportCommandHandler {
         SalesReportConfig config = configStore.getSnapshot();
         String formatted = slot.format(SLOT_FORMATTER);
         if (!config.getTimes().contains(formatted)) {
-            event.reply("Time `%s` is not in the schedule.".formatted(formatted))
+            event.reply("Time `%s` is not in the sales update schedule.".formatted(formatted))
                     .setEphemeral(true)
                     .queue();
             return;
@@ -215,10 +223,11 @@ public class SalesReportCommandHandler {
         config.setTimes(config.getTimes().stream()
                 .filter(existing -> !formatted.equals(existing))
                 .toList());
+        config.getLastRunDateBySlot().remove("update:" + formatted);
         config.getLastRunDateBySlot().remove(formatted);
         configStore.replaceAndPersist(config);
 
-        event.reply("Removed `%s` from sales report schedule.".formatted(formatted))
+        event.reply("Removed `%s` from sales update schedule.".formatted(formatted))
                 .setEphemeral(true)
                 .queue();
     }
@@ -226,18 +235,22 @@ public class SalesReportCommandHandler {
     private void handleClearTimes(SlashCommandInteractionEvent event) {
         OptionMapping confirmOption = event.getOption("confirm");
         if (confirmOption == null || !confirmOption.getAsBoolean()) {
-            event.reply("Set `confirm:true` to clear all scheduled times.")
+            event.reply("Set `confirm:true` to clear all sales update schedule times.")
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
         SalesReportConfig config = configStore.getSnapshot();
+        List<String> previousUpdateTimes = new ArrayList<>(config.getTimes());
         config.setTimes(new ArrayList<>());
-        config.setLastRunDateBySlot(new java.util.LinkedHashMap<>());
+        for (String slot : previousUpdateTimes) {
+            config.getLastRunDateBySlot().remove("update:" + slot);
+            config.getLastRunDateBySlot().remove(slot);
+        }
         configStore.replaceAndPersist(config);
 
-        event.reply("Cleared all sales report schedule times.")
+        event.reply("Cleared all sales update schedule times.")
                 .setEphemeral(true)
                 .queue();
     }
@@ -257,7 +270,7 @@ public class SalesReportCommandHandler {
         config.setTargetChannelId(targetOption.getAsChannel().getId());
         configStore.replaceAndPersist(config);
 
-        event.reply("Sales report channel set to %s.".formatted(targetOption.getAsChannel().getAsMention()))
+        event.reply("Sales update channel set to %s.".formatted(targetOption.getAsChannel().getAsMention()))
                 .setEphemeral(true)
                 .queue();
     }
@@ -288,9 +301,15 @@ public class SalesReportCommandHandler {
 
         SalesReportConfig config = configStore.getSnapshot();
         String formatted = slot.format(SLOT_FORMATTER);
-        config.setTargetChannelId(targetOption.getAsChannel().getId());
-        config.setTimes(new ArrayList<>(List.of(formatted)));
-        config.setLastRunDateBySlot(new java.util.LinkedHashMap<>());
+        String previousOverviewTime = config.getOverviewTime();
+        config.setOverviewTargetChannelId(targetOption.getAsChannel().getId());
+        config.setOverviewTime(formatted);
+        config.getLastRunDateBySlot().remove("overview:" + formatted);
+        config.getLastRunDateBySlot().remove(formatted);
+        if (!isBlank(previousOverviewTime)) {
+            config.getLastRunDateBySlot().remove("overview:" + previousOverviewTime);
+            config.getLastRunDateBySlot().remove(previousOverviewTime);
+        }
         if (!timezone.isBlank()) {
             config.setTimezone(timezone);
         }
@@ -738,17 +757,24 @@ public class SalesReportCommandHandler {
         return LocalTime.of(hour, minute);
     }
 
-    private String describeNextRun(SalesReportConfig config) {
-        if (config.getTimes() == null || config.getTimes().isEmpty()) {
+    private String describeNextOverview(SalesReportConfig config) {
+        if (config == null || isBlank(config.getOverviewTime())) {
+            return "No daily overview time configured";
+        }
+        return describeNextScheduledRun(List.of(config.getOverviewTime()), config.getTimezone());
+    }
+
+    private String describeNextScheduledRun(List<String> slots, String timezone) {
+        if (slots == null || slots.isEmpty()) {
             return "No scheduled times configured";
         }
 
         try {
-            ZoneId zoneId = ZoneId.of(config.getTimezone());
+            ZoneId zoneId = ZoneId.of(timezone);
             ZonedDateTime now = ZonedDateTime.now(zoneId);
             ZonedDateTime next = null;
 
-            for (String slot : config.getTimes()) {
+            for (String slot : slots) {
                 LocalTime time = LocalTime.parse(slot, SLOT_FORMATTER);
                 ZonedDateTime candidate = now.withHour(time.getHour()).withMinute(time.getMinute()).withSecond(0).withNano(0);
                 if (!candidate.isAfter(now)) {
@@ -763,6 +789,13 @@ public class SalesReportCommandHandler {
         } catch (RuntimeException ignored) {
             return "Invalid timezone or schedule";
         }
+    }
+
+    private String formatChannelMention(String channelId) {
+        if (isBlank(channelId)) {
+            return "(not set)";
+        }
+        return "<#" + channelId.trim() + ">";
     }
 
     private boolean hasManageServer(Member member) {

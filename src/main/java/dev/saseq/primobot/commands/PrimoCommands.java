@@ -102,15 +102,15 @@ public final class PrimoCommands {
                                 .addOption(OptionType.BOOLEAN, "enabled", "True to enable scheduled reports", true),
                         new SubcommandData("set-timezone", "Set schedule timezone")
                                 .addOption(OptionType.STRING, "timezone", "IANA timezone (example: Asia/Manila)", true),
-                        new SubcommandData("add-time", "Add one schedule time")
+                        new SubcommandData("add-time", "Add one sales update schedule time")
                                 .addOption(OptionType.INTEGER, "hour", "Hour (0-23)", true)
                                 .addOption(OptionType.INTEGER, "minute", "Minute (0-59)", true),
-                        new SubcommandData("remove-time", "Remove one schedule time")
+                        new SubcommandData("remove-time", "Remove one sales update schedule time")
                                 .addOption(OptionType.INTEGER, "hour", "Hour (0-23)", true)
                                 .addOption(OptionType.INTEGER, "minute", "Minute (0-59)", true),
-                        new SubcommandData("clear-times", "Clear all schedule times")
+                        new SubcommandData("clear-times", "Clear all sales update schedule times")
                                 .addOption(OptionType.BOOLEAN, "confirm", "Set true to confirm", true),
-                        new SubcommandData("set-summary", "Set broadcast channel and daily schedule time")
+                        new SubcommandData("set-summary", "Set daily overview channel and schedule time")
                                 .addOptions(
                                         new OptionData(OptionType.CHANNEL, "target", "Target channel (text or forum)", true)
                                                 .setChannelTypes(ChannelType.TEXT, ChannelType.FORUM),
@@ -118,7 +118,7 @@ public final class PrimoCommands {
                                         new OptionData(OptionType.INTEGER, "minute", "Minute (0-59)", true),
                                         new OptionData(OptionType.STRING, "timezone", "Optional IANA timezone override", false)
                                 ),
-                        new SubcommandData("set-channel", "Set default target channel for scheduled reports")
+                        new SubcommandData("set-channel", "Set default target channel for sales updates")
                                 .addOptions(new OptionData(OptionType.CHANNEL, "target", "Target channel (text or forum)", true)
                                         .setChannelTypes(ChannelType.TEXT, ChannelType.FORUM)),
                         new SubcommandData("run-now", "Send a sales report immediately")

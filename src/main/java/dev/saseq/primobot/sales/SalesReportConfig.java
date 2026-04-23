@@ -10,6 +10,8 @@ public class SalesReportConfig {
     private String timezone = "Asia/Manila";
     private List<String> times = new ArrayList<>();
     private String targetChannelId = "";
+    private String overviewTime = "";
+    private String overviewTargetChannelId = "";
     private String messageTone = "casual";
     private String signature = "Thanks, Primo";
     private List<SalesAccountConfig> accounts = new ArrayList<>();
@@ -45,6 +47,22 @@ public class SalesReportConfig {
 
     public void setTargetChannelId(String targetChannelId) {
         this.targetChannelId = targetChannelId;
+    }
+
+    public String getOverviewTime() {
+        return overviewTime;
+    }
+
+    public void setOverviewTime(String overviewTime) {
+        this.overviewTime = overviewTime;
+    }
+
+    public String getOverviewTargetChannelId() {
+        return overviewTargetChannelId;
+    }
+
+    public void setOverviewTargetChannelId(String overviewTargetChannelId) {
+        this.overviewTargetChannelId = overviewTargetChannelId;
     }
 
     public String getMessageTone() {

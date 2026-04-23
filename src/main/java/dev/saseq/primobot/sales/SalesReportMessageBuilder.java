@@ -25,15 +25,23 @@ public class SalesReportMessageBuilder {
         return "Good Evening";
     }
 
-    public String buildMessage(SalesReportSnapshot snapshot, String tone, String signature) {
+    public String buildMessage(SalesReportSnapshot snapshot, String tone, String signature, boolean dailyOverview) {
         boolean casual = "casual".equalsIgnoreCase(tone);
         String greeting = resolveGreeting(snapshot.generatedAt().toLocalTime());
 
         StringBuilder content = new StringBuilder();
         if (casual) {
-            content.append(greeting).append(", team! Here's your daily sales overview.\n\n");
+            if (dailyOverview) {
+                content.append(greeting).append(", team! Here's your daily sales overview.\n\n");
+            } else {
+                content.append(greeting).append(", team! Here's your sales update.\n\n");
+            }
         } else {
-            content.append(greeting).append(", team. Here is today's daily sales overview.\n\n");
+            if (dailyOverview) {
+                content.append(greeting).append(", team. Here is today's daily sales overview.\n\n");
+            } else {
+                content.append(greeting).append(", team. Here is your sales update.\n\n");
+            }
         }
 
         List<SalesAccountResult> results = snapshot.accountResults() == null

@@ -32,12 +32,13 @@ public class SalesReportExecutorService {
     public DispatchResult execute(Guild guild,
                                   SalesReportConfig config,
                                   String overrideTargetChannelId,
-                                  String selectedAccountId) {
+                                  String selectedAccountId,
+                                  boolean dailyOverview) {
         if (guild == null) {
             return new DispatchResult(DispatchStatus.GUILD_NOT_FOUND, "", "", "No guild available", 0, 0);
         }
 
-        String targetId = resolveTargetChannelId(config, overrideTargetChannelId);
+        String targetId = resolveTargetChannelId(config, overrideTargetChannelId, dailyOverview);
         if (targetId.isBlank()) {
             return new DispatchResult(DispatchStatus.TARGET_NOT_CONFIGURED, "", "", "No target channel configured", 0, 0);
         }
@@ -52,7 +53,8 @@ public class SalesReportExecutorService {
         String content = messageBuilder.buildMessage(
                 snapshot,
                 effectiveConfig.getMessageTone(),
-                effectiveConfig.getSignature());
+                effectiveConfig.getSignature(),
+                dailyOverview);
 
         try {
             List<String> chunks = DiscordMessageUtils.chunkMessage(content, DISCORD_MESSAGE_MAX_LENGTH);
@@ -67,7 +69,7 @@ public class SalesReportExecutorService {
                     return new DispatchResult(DispatchStatus.TARGET_NOT_FOUND, targetId, selectedAccountId, "Target channel not found", 0, 0);
                 }
 
-                String title = buildForumPostTitle(zoneId, selectedAccountId);
+                String title = buildForumPostTitle(zoneId, selectedAccountId, dailyOverview);
                 ThreadChannel thread = forumTarget.createForumPost(title, MessageCreateData.fromContent(chunks.get(0)))
                         .complete()
                         .getThreadChannel();
@@ -84,15 +86,26 @@ public class SalesReportExecutorService {
         }
     }
 
-    private String resolveTargetChannelId(SalesReportConfig config, String overrideTargetChannelId) {
+    private String resolveTargetChannelId(SalesReportConfig config,
+                                          String overrideTargetChannelId,
+                                          boolean dailyOverview) {
         String override = overrideTargetChannelId == null ? "" : overrideTargetChannelId.trim();
         if (!override.isBlank()) {
             return override;
         }
-        if (config == null || config.getTargetChannelId() == null) {
+
+        if (config == null) {
             return "";
         }
-        return config.getTargetChannelId().trim();
+
+        String configured = dailyOverview
+                ? safeTrim(config.getOverviewTargetChannelId())
+                : safeTrim(config.getTargetChannelId());
+
+        if (configured.isBlank() && dailyOverview) {
+            configured = safeTrim(config.getTargetChannelId());
+        }
+        return configured;
     }
 
     private SalesReportConfig filterConfigByAccount(SalesReportConfig config, String selectedAccountId) {
@@ -120,6 +133,8 @@ public class SalesReportExecutorService {
         filtered.setTimezone(config.getTimezone());
         filtered.setTimes(config.getTimes());
         filtered.setTargetChannelId(config.getTargetChannelId());
+        filtered.setOverviewTime(config.getOverviewTime());
+        filtered.setOverviewTargetChannelId(config.getOverviewTargetChannelId());
         filtered.setMessageTone(config.getMessageTone());
         filtered.setSignature(config.getSignature());
         filtered.setLastRunDateBySlot(config.getLastRunDateBySlot());
@@ -135,14 +150,19 @@ public class SalesReportExecutorService {
         }
     }
 
-    private String buildForumPostTitle(ZoneId zoneId, String selectedAccountId) {
+    private String buildForumPostTitle(ZoneId zoneId, String selectedAccountId, boolean dailyOverview) {
         String timestamp = ZonedDateTime.now(zoneId).format(FORUM_TITLE_TIME_FORMATTER);
         String scope = (selectedAccountId == null || selectedAccountId.isBlank()) ? "All Accounts" : selectedAccountId.trim();
-        String title = "Sales Report | " + scope + " | " + timestamp;
+        String reportType = dailyOverview ? "Daily Overview" : "Sales Update";
+        String title = reportType + " | " + scope + " | " + timestamp;
         if (title.length() <= FORUM_POST_TITLE_MAX) {
             return title;
         }
         return title.substring(0, FORUM_POST_TITLE_MAX);
+    }
+
+    private String safeTrim(String value) {
+        return value == null ? "" : value.trim();
     }
 
     public enum DispatchStatus {

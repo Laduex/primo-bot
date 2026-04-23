@@ -36,6 +36,8 @@ public class SalesReportConfigStore {
     private final String defaultTimezone;
     private final String defaultTimesRaw;
     private final String defaultTargetChannelId;
+    private final String defaultOverviewTimeRaw;
+    private final String defaultOverviewTargetChannelId;
     private final String defaultTone;
     private final String defaultSignature;
 
@@ -47,6 +49,8 @@ public class SalesReportConfigStore {
             @Value("${SALES_REPORT_DEFAULT_TIMEZONE:Asia/Manila}") String defaultTimezone,
             @Value("${SALES_REPORT_DEFAULT_TIMES:09:00,12:00,15:00,18:00,21:00}") String defaultTimesRaw,
             @Value("${SALES_REPORT_DEFAULT_TARGET_CHANNEL_ID:}") String defaultTargetChannelId,
+            @Value("${SALES_REPORT_DEFAULT_OVERVIEW_TIME:}") String defaultOverviewTimeRaw,
+            @Value("${SALES_REPORT_DEFAULT_OVERVIEW_TARGET_CHANNEL_ID:}") String defaultOverviewTargetChannelId,
             @Value("${SALES_REPORT_DEFAULT_TONE:casual}") String defaultTone,
             @Value("${SALES_REPORT_DEFAULT_SIGNATURE:Thanks, Primo}") String defaultSignature) {
         this.configPath = Path.of(configPath);
@@ -54,6 +58,8 @@ public class SalesReportConfigStore {
         this.defaultTimezone = defaultTimezone == null ? "Asia/Manila" : defaultTimezone.trim();
         this.defaultTimesRaw = defaultTimesRaw == null ? "" : defaultTimesRaw.trim();
         this.defaultTargetChannelId = defaultTargetChannelId == null ? "" : defaultTargetChannelId.trim();
+        this.defaultOverviewTimeRaw = defaultOverviewTimeRaw == null ? "" : defaultOverviewTimeRaw.trim();
+        this.defaultOverviewTargetChannelId = defaultOverviewTargetChannelId == null ? "" : defaultOverviewTargetChannelId.trim();
         this.defaultTone = defaultTone == null ? "casual" : defaultTone.trim();
         this.defaultSignature = defaultSignature == null ? "Thanks, Primo" : defaultSignature.trim();
     }
@@ -91,8 +97,21 @@ public class SalesReportConfigStore {
         SalesReportConfig config = new SalesReportConfig();
         config.setEnabled(defaultEnabled);
         config.setTimezone(isValidTimezone(defaultTimezone) ? defaultTimezone : "Asia/Manila");
-        config.setTimes(parseTimes(defaultTimesRaw));
-        config.setTargetChannelId(isSnowflake(defaultTargetChannelId) ? defaultTargetChannelId : "");
+        List<String> updateTimes = parseTimes(defaultTimesRaw);
+        String overviewTime = normalizeSingleTime(defaultOverviewTimeRaw);
+        if (overviewTime.isBlank() && !updateTimes.isEmpty()) {
+            overviewTime = updateTimes.remove(updateTimes.size() - 1);
+        }
+        config.setTimes(updateTimes);
+        config.setOverviewTime(overviewTime);
+
+        String targetChannelId = isSnowflake(defaultTargetChannelId) ? defaultTargetChannelId : "";
+        String overviewTargetChannelId = isSnowflake(defaultOverviewTargetChannelId)
+                ? defaultOverviewTargetChannelId
+                : targetChannelId;
+
+        config.setTargetChannelId(targetChannelId);
+        config.setOverviewTargetChannelId(overviewTargetChannelId);
         config.setMessageTone(normalizeTone(defaultTone));
         config.setSignature(defaultSignature.isBlank() ? "Thanks, Primo" : defaultSignature);
         config.setAccounts(new ArrayList<>());
@@ -108,10 +127,33 @@ public class SalesReportConfigStore {
         }
 
         List<String> parsedTimes = normalizeTimes(config.getTimes());
+        String overviewTime = normalizeSingleTime(config.getOverviewTime());
+
+        if (overviewTime.isBlank() && !parsedTimes.isEmpty()) {
+            // Backward compatibility for older configs where all times lived in one list:
+            // infer the latest slot as the daily overview, keep earlier slots as updates.
+            overviewTime = parsedTimes.get(parsedTimes.size() - 1);
+            parsedTimes = new ArrayList<>(parsedTimes.subList(0, parsedTimes.size() - 1));
+        } else if (!overviewTime.isBlank()) {
+            List<String> filtered = new ArrayList<>();
+            for (String slot : parsedTimes) {
+                if (!overviewTime.equals(slot)) {
+                    filtered.add(slot);
+                }
+            }
+            parsedTimes = filtered;
+        }
+
         config.setTimes(parsedTimes);
+        config.setOverviewTime(overviewTime);
 
         String targetChannelId = safeTrim(config.getTargetChannelId());
-        config.setTargetChannelId(isSnowflake(targetChannelId) ? targetChannelId : "");
+        targetChannelId = isSnowflake(targetChannelId) ? targetChannelId : "";
+        config.setTargetChannelId(targetChannelId);
+
+        String overviewTargetChannelId = safeTrim(config.getOverviewTargetChannelId());
+        overviewTargetChannelId = isSnowflake(overviewTargetChannelId) ? overviewTargetChannelId : targetChannelId;
+        config.setOverviewTargetChannelId(overviewTargetChannelId);
 
         config.setMessageTone(normalizeTone(config.getMessageTone()));
 
@@ -127,9 +169,10 @@ public class SalesReportConfigStore {
             config.setLastRunDateBySlot(new LinkedHashMap<>(lastRunBySlot));
         }
 
-        if (!config.getTimes().isEmpty()) {
-            config.getLastRunDateBySlot().entrySet().removeIf(entry -> !config.getTimes().contains(entry.getKey()));
-        }
+        List<String> updateSlots = new ArrayList<>(config.getTimes());
+        String normalizedOverviewTime = config.getOverviewTime();
+        config.getLastRunDateBySlot().entrySet().removeIf(entry ->
+                !isSupportedLastRunSlotKey(entry.getKey(), updateSlots, normalizedOverviewTime));
 
         return config;
     }
@@ -209,6 +252,14 @@ public class SalesReportConfigStore {
         return normalized;
     }
 
+    private String normalizeSingleTime(String rawTime) {
+        LocalTime parsed = parseTime(rawTime);
+        if (parsed == null) {
+            return "";
+        }
+        return parsed.format(TIME_FORMATTER);
+    }
+
     private LocalTime parseTime(String rawTime) {
         if (rawTime == null || rawTime.isBlank()) {
             return null;
@@ -258,6 +309,8 @@ public class SalesReportConfigStore {
             fallback.setTimezone(source.getTimezone());
             fallback.setTimes(new ArrayList<>(source.getTimes()));
             fallback.setTargetChannelId(source.getTargetChannelId());
+            fallback.setOverviewTime(source.getOverviewTime());
+            fallback.setOverviewTargetChannelId(source.getOverviewTargetChannelId());
             fallback.setMessageTone(source.getMessageTone());
             fallback.setSignature(source.getSignature());
             fallback.setAccounts(new ArrayList<>(source.getAccounts()));
@@ -291,6 +344,31 @@ public class SalesReportConfigStore {
 
     private boolean isSnowflake(String value) {
         return value != null && SNOWFLAKE_PATTERN.matcher(value.trim()).matches();
+    }
+
+    private boolean isSupportedLastRunSlotKey(String key, List<String> updateTimes, String overviewTime) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+
+        String trimmed = key.trim();
+        if (trimmed.startsWith("update:")) {
+            String slot = normalizeSingleTime(trimmed.substring("update:".length()));
+            return !slot.isBlank() && updateTimes.contains(slot);
+        }
+
+        if (trimmed.startsWith("overview:")) {
+            String slot = normalizeSingleTime(trimmed.substring("overview:".length()));
+            return !slot.isBlank() && !overviewTime.isBlank() && overviewTime.equals(slot);
+        }
+
+        String legacySlot = normalizeSingleTime(trimmed);
+        if (legacySlot.isBlank()) {
+            return false;
+        }
+
+        return updateTimes.contains(legacySlot)
+                || (!overviewTime.isBlank() && overviewTime.equals(legacySlot));
     }
 
     private String safeTrim(String value) {
