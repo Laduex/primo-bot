@@ -172,7 +172,7 @@ public final class PrimoCommands {
 
     public static CommandData buildSalesSlashCommand() {
         return Commands.slash(COMMAND_SALES, "Send sales reports now")
-                .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER))
+                // Keep /sales visible in DMs; permission checks are enforced at runtime.
                 .addSubcommands(
                         new SubcommandData("run-now", "Send a sales report immediately")
                                 .addOptions(
