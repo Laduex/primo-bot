@@ -105,7 +105,7 @@ class LoyverseApiSalesProviderTest {
     }
 
     @Test
-    void usesCreatedAtForDailyFilter() {
+    void prefersReceiptDateOverCreatedAtForDailyFilter() {
         String payload = """
                 {
                   "receipts": [
@@ -132,8 +132,8 @@ class LoyverseApiSalesProviderTest {
                 LocalDate.of(2026, 4, 24),
                 ZoneId.of("Asia/Manila"));
 
-        assertEquals(new BigDecimal("1910.0"), result.amount());
-        assertEquals(2, result.includedCount());
+        assertEquals(new BigDecimal("210.0"), result.amount());
+        assertEquals(1, result.includedCount());
     }
 
     @Test

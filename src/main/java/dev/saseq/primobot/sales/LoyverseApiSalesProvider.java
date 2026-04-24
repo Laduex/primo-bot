@@ -320,15 +320,14 @@ public class LoyverseApiSalesProvider implements SalesProvider {
     }
 
     private boolean isReceiptOnReportDate(JsonNode receipt, LocalDate reportDate, ZoneId zoneId) {
-        // Loyverse dashboard day totals align with receipt creation day.
-        LocalDate createdDate = firstParsedDate(receipt, zoneId, "created_at");
-        if (createdDate != null) {
-            return createdDate.equals(reportDate);
-        }
-
         LocalDate saleDate = firstParsedDate(receipt, zoneId, "receipt_date");
         if (saleDate != null) {
             return saleDate.equals(reportDate);
+        }
+
+        LocalDate createdDate = firstParsedDate(receipt, zoneId, "created_at");
+        if (createdDate != null) {
+            return createdDate.equals(reportDate);
         }
 
         JsonNode payments = receipt.get("payments");
