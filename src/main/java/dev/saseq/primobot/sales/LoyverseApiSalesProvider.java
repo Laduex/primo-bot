@@ -7,6 +7,7 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -68,11 +69,14 @@ public class LoyverseApiSalesProvider implements SalesProvider {
                 throw new IllegalStateException("Loyverse pagination exceeded safety limit");
             }
 
-            String responseBody = restClient.get()
+            byte[] responseBytes = restClient.get()
                     .uri(URI.create(nextUrl))
                     .header("Authorization", "Bearer " + token)
                     .retrieve()
-                    .body(String.class);
+                    .body(byte[].class);
+            String responseBody = responseBytes == null
+                    ? null
+                    : new String(responseBytes, StandardCharsets.UTF_8);
 
             if (responseBody == null || responseBody.isBlank()) {
                 throw new IllegalStateException("Loyverse API returned empty response");
