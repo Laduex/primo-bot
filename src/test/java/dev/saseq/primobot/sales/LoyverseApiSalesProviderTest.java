@@ -105,7 +105,7 @@ class LoyverseApiSalesProviderTest {
     }
 
     @Test
-    void prefersReceiptDateOverCreatedAtForDailyFilter() {
+    void usesCreatedAtForDailyFilter() {
         String payload = """
                 {
                   "receipts": [
@@ -132,7 +132,27 @@ class LoyverseApiSalesProviderTest {
                 LocalDate.of(2026, 4, 24),
                 ZoneId.of("Asia/Manila"));
 
-        assertEquals(new BigDecimal("210.00"), result.amount());
-        assertEquals(1, result.includedCount());
+        assertEquals(new BigDecimal("1910.0"), result.amount());
+        assertEquals(2, result.includedCount());
+    }
+
+    @Test
+    void treatsNumericMoneyFieldsAsMajorUnits() {
+        String payload = """
+                {
+                  "receipts": [
+                    { "created_at": "2026-04-24T02:00:00Z", "gross_total": 350 },
+                    { "created_at": "2026-04-24T03:00:00Z", "total_money": 1700 }
+                  ]
+                }
+                """;
+
+        LoyverseApiSalesProvider.PageResult result = provider.parseSalesPageForDate(
+                payload,
+                LocalDate.of(2026, 4, 24),
+                ZoneId.of("Asia/Manila"));
+
+        assertEquals(new BigDecimal("2050"), result.amount());
+        assertEquals(2, result.includedCount());
     }
 }

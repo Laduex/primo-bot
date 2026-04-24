@@ -320,6 +320,12 @@ public class LoyverseApiSalesProvider implements SalesProvider {
     }
 
     private boolean isReceiptOnReportDate(JsonNode receipt, LocalDate reportDate, ZoneId zoneId) {
+        // Loyverse dashboard day totals align with receipt creation day.
+        LocalDate createdDate = firstParsedDate(receipt, zoneId, "created_at");
+        if (createdDate != null) {
+            return createdDate.equals(reportDate);
+        }
+
         LocalDate saleDate = firstParsedDate(receipt, zoneId, "receipt_date");
         if (saleDate != null) {
             return saleDate.equals(reportDate);
@@ -469,9 +475,7 @@ public class LoyverseApiSalesProvider implements SalesProvider {
         }
 
         if (node.isNumber()) {
-            if (node.isIntegralNumber()) {
-                return BigDecimal.valueOf(node.asLong()).movePointLeft(2);
-            }
+            // Loyverse numeric money fields are major-unit amounts (e.g., 370 means PHP 370.00).
             return node.decimalValue();
         }
 
