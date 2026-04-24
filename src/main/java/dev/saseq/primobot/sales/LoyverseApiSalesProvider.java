@@ -316,32 +316,60 @@ public class LoyverseApiSalesProvider implements SalesProvider {
     }
 
     private boolean isReceiptOnReportDate(JsonNode receipt, LocalDate reportDate, ZoneId zoneId) {
-        String[] dateFields = {"created_at", "open_time", "close_time", "receipt_date", "date"};
-        for (String field : dateFields) {
-            JsonNode candidate = receipt.get(field);
-            if (candidate == null || candidate.isNull()) {
-                continue;
-            }
-            String raw = trim(candidate.asText());
-            if (raw.isBlank()) {
-                continue;
-            }
-            try {
-                LocalDate parsed = OffsetDateTime.parse(raw).atZoneSameInstant(zoneId).toLocalDate();
-                return parsed.equals(reportDate);
-            } catch (Exception ignored) {
-                if (raw.length() >= 10) {
-                    try {
-                        LocalDate parsed = LocalDate.parse(raw.substring(0, 10));
-                        return parsed.equals(reportDate);
-                    } catch (Exception ignoredAgain) {
-                        // continue trying other fields
-                    }
+        LocalDate saleDate = firstParsedDate(receipt, zoneId, "receipt_date");
+        if (saleDate != null) {
+            return saleDate.equals(reportDate);
+        }
+
+        JsonNode payments = receipt.get("payments");
+        if (payments != null && payments.isArray()) {
+            for (JsonNode payment : payments) {
+                if (payment == null || payment.isNull()) {
+                    continue;
+                }
+                LocalDate paidDate = firstParsedDate(payment, zoneId, "paid_at");
+                if (paidDate != null) {
+                    return paidDate.equals(reportDate);
                 }
             }
         }
 
-        return true;
+        LocalDate fallbackDate = firstParsedDate(receipt, zoneId, "open_time", "close_time", "created_at", "date");
+        return fallbackDate == null || fallbackDate.equals(reportDate);
+    }
+
+    private LocalDate firstParsedDate(JsonNode node, ZoneId zoneId, String... fieldNames) {
+        if (node == null || node.isNull() || fieldNames == null || fieldNames.length == 0) {
+            return null;
+        }
+
+        for (String field : fieldNames) {
+            LocalDate parsed = parseLocalDate(node.path(field).asText(""), zoneId);
+            if (parsed != null) {
+                return parsed;
+            }
+        }
+        return null;
+    }
+
+    private LocalDate parseLocalDate(String rawValue, ZoneId zoneId) {
+        String raw = trim(rawValue);
+        if (raw.isBlank()) {
+            return null;
+        }
+
+        try {
+            return OffsetDateTime.parse(raw).atZoneSameInstant(zoneId).toLocalDate();
+        } catch (Exception ignored) {
+            if (raw.length() >= 10) {
+                try {
+                    return LocalDate.parse(raw.substring(0, 10));
+                } catch (Exception ignoredAgain) {
+                    return null;
+                }
+            }
+            return null;
+        }
     }
 
     private BigDecimal extractGrossAmount(JsonNode receipt) {

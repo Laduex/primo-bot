@@ -103,4 +103,36 @@ class LoyverseApiSalesProviderTest {
         assertEquals(new BigDecimal("350.00"), result.amount());
         assertTrue(result.skuSales().isEmpty());
     }
+
+    @Test
+    void prefersReceiptDateOverCreatedAtForDailyFilter() {
+        String payload = """
+                {
+                  "receipts": [
+                    {
+                      "receipt_number": "1-2568",
+                      "receipt_type": "SALE",
+                      "receipt_date": "2026-04-23T10:22:04.000Z",
+                      "created_at": "2026-04-24T00:30:57.000Z",
+                      "total_money": 1700.0
+                    },
+                    {
+                      "receipt_number": "1-2569",
+                      "receipt_type": "SALE",
+                      "receipt_date": "2026-04-24T00:06:42.000Z",
+                      "created_at": "2026-04-24T00:30:57.000Z",
+                      "total_money": 210.0
+                    }
+                  ]
+                }
+                """;
+
+        LoyverseApiSalesProvider.PageResult result = provider.parseSalesPageForDate(
+                payload,
+                LocalDate.of(2026, 4, 24),
+                ZoneId.of("Asia/Manila"));
+
+        assertEquals(new BigDecimal("210.00"), result.amount());
+        assertEquals(1, result.includedCount());
+    }
 }
