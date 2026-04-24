@@ -176,9 +176,7 @@ public final class PrimoCommands {
                 .addSubcommands(
                         new SubcommandData("run-now", "Send a sales report immediately")
                                 .addOptions(
-                                        new OptionData(OptionType.CHANNEL, "target", "Target channel (text or forum)", true)
-                                                .setChannelTypes(ChannelType.TEXT, ChannelType.FORUM),
-                                        new OptionData(OptionType.STRING, "scope", "Run all accounts or a single account", true)
+                                        new OptionData(OptionType.STRING, "scope", "Run all accounts or a single account", false)
                                                 .addChoice("All Accounts", "all")
                                                 .addChoice("Single Account", "single"),
                                         new OptionData(OptionType.STRING, "account", "Select account when scope is Single Account", false)

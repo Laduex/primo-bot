@@ -40,6 +40,8 @@ public class PrimoBotConfig {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
                 syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand, salesReportCommand, salesCommand);
+                // Keep /sales as a global command so admins can trigger run-now in bot DMs.
+                jda.upsertCommand(salesCommand).queue();
                 deleteGlobalCommandsByName(jda, Set.of(
                         PrimoCommands.COMMAND_VAT,
                         PrimoCommands.COMMAND_ORDER,
@@ -47,7 +49,6 @@ public class PrimoBotConfig {
                         PrimoCommands.COMMAND_COMPLETED,
                         PrimoCommands.COMMAND_ORDERS_REMINDER,
                         PrimoCommands.COMMAND_SALES_REPORT,
-                        PrimoCommands.COMMAND_SALES,
                         "recipe",
                         "supplier",
                         "primo"

@@ -1,14 +1,17 @@
 package dev.saseq.primobot.handlers;
 
+import dev.saseq.primobot.commands.PrimoCommands;
 import dev.saseq.primobot.sales.SalesAccountConfig;
 import dev.saseq.primobot.sales.SalesPlatform;
 import dev.saseq.primobot.sales.SalesReportConfig;
 import dev.saseq.primobot.sales.SalesReportConfigStore;
 import dev.saseq.primobot.sales.SalesReportExecutorService;
 import dev.saseq.primobot.sales.SalesReportSchedulerService;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -57,7 +60,11 @@ public class SalesReportCommandHandler {
 
     public void handle(SlashCommandInteractionEvent event) {
         if (event.getGuild() == null || event.getMember() == null) {
-            event.reply("This command can only be used inside a Discord server.")
+            if (isDirectRunNowSlash(event)) {
+                handleDirectRunNowSlash(event);
+                return;
+            }
+            event.reply("This command can only be used inside a Discord server. In DMs, use `/sales run-now` or `sales run now`.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -96,6 +103,18 @@ public class SalesReportCommandHandler {
             case "set-copy" -> handleSetCopy(event);
             default -> event.reply("Unknown subcommand.").setEphemeral(true).queue();
         }
+    }
+
+    private boolean isDirectRunNowSlash(SlashCommandInteractionEvent event) {
+        if (event == null) {
+            return false;
+        }
+        if (!"run-now".equals(event.getSubcommandName())) {
+            return false;
+        }
+        String commandName = event.getName();
+        return PrimoCommands.COMMAND_SALES.equals(commandName)
+                || PrimoCommands.COMMAND_SALES_REPORT.equals(commandName);
     }
 
     private void handleStatus(SlashCommandInteractionEvent event) {
@@ -336,7 +355,12 @@ public class SalesReportCommandHandler {
     }
 
     public void handleRunNowAccountAutocomplete(CommandAutoCompleteInteractionEvent event) {
-        if (event.getGuild() == null || event.getMember() == null || !hasManageServer(event.getMember())) {
+        if (event.getGuild() != null && event.getMember() != null) {
+            if (!hasManageServer(event.getMember())) {
+                event.replyChoices(List.of()).queue();
+                return;
+            }
+        } else if (!hasManageServerForDirectRunNow(event.getJDA(), event.getUser())) {
             event.replyChoices(List.of()).queue();
             return;
         }
@@ -354,6 +378,16 @@ public class SalesReportCommandHandler {
         SalesReportConfig config = configStore.getSnapshot();
         List<Command.Choice> choices = buildRunNowAccountChoices(config, query);
         event.replyChoices(choices).queue();
+    }
+
+    private void handleDirectRunNowSlash(SlashCommandInteractionEvent event) {
+        if (!hasManageServerForDirectRunNow(event)) {
+            event.reply("You need Manage Server permission to run `sales run now`.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+        handleRunNow(event);
     }
 
     public boolean handleDirectRunNowMessage(MessageReceivedEvent event) {
@@ -466,9 +500,19 @@ public class SalesReportCommandHandler {
         String finalOverrideTargetId = overrideTargetId;
         String finalSelectedAccountId = selectedAccountId;
         var guild = event.getGuild();
+        MessageChannel directChannel = guild == null ? event.getChannel() : null;
         event.deferReply(true).queue(hook -> {
             CompletableFuture
-                    .supplyAsync(() -> schedulerService.runNow(guild, finalOverrideTargetId, finalSelectedAccountId))
+                    .supplyAsync(() -> {
+                        if (guild == null) {
+                            return executorService.executeDirect(
+                                    configStore.getSnapshot(),
+                                    finalSelectedAccountId,
+                                    directChannel,
+                                    false);
+                        }
+                        return schedulerService.runNow(guild, finalOverrideTargetId, finalSelectedAccountId);
+                    })
                     .whenComplete((result, error) -> {
                         if (error != null) {
                             Throwable cause = error.getCause() != null ? error.getCause() : error;
@@ -479,9 +523,46 @@ public class SalesReportCommandHandler {
                             hook.editOriginal("Failed to send sales report: " + message).queue();
                             return;
                         }
-                        replyRunNowResult(hook, result);
+                        if (guild == null) {
+                            replyDirectRunNowSlashResult(hook, result);
+                        } else {
+                            replyRunNowResult(hook, result);
+                        }
                     });
         });
+    }
+
+    private void replyDirectRunNowSlashResult(InteractionHook hook,
+                                              SalesReportExecutorService.DispatchResult result) {
+        switch (result.status()) {
+            case SENT -> {
+                String scopeLabel = result.accountId() == null || result.accountId().isBlank()
+                        ? "all enabled accounts"
+                        : "account `%s`".formatted(result.accountId());
+                hook.editOriginal("Sales report sent here for %s. Success: `%d`, Failed: `%d`."
+                                .formatted(scopeLabel, result.successCount(), result.failureCount()))
+                        .queue();
+            }
+            case ACCOUNT_NOT_FOUND -> {
+                String accountId = result.accountId() == null ? "" : result.accountId().trim();
+                if (accountId.isBlank()) {
+                    hook.editOriginal("No matching account was found. Run `/sales-report list-accounts` in the server to check valid account IDs.")
+                            .queue();
+                } else {
+                    hook.editOriginal("No account found for id `%s`. Run `/sales-report list-accounts` in the server to check valid account IDs."
+                                    .formatted(accountId))
+                            .queue();
+                }
+            }
+            case GUILD_NOT_FOUND, SEND_FAILED, TARGET_NOT_CONFIGURED, TARGET_NOT_FOUND -> {
+                String message = result.message();
+                if (message == null || message.isBlank()) {
+                    message = "Unknown error";
+                }
+                hook.editOriginal("Failed to send sales report: " + message)
+                        .queue();
+            }
+        }
     }
 
     private void replyDirectRunNowResult(MessageChannel channel,
@@ -557,21 +638,18 @@ public class SalesReportCommandHandler {
         return new DirectRunNowRequest(suffix, false);
     }
 
-    private Member resolveMemberForPermissionCheck(MessageReceivedEvent event, Guild guild) {
-        if (event == null || guild == null) {
+    private Member resolveMemberForPermissionCheck(String userId, Guild guild) {
+        if (userId == null || userId.isBlank() || guild == null) {
             return null;
         }
-        if (event.isFromGuild() && event.getMember() != null) {
-            return event.getMember();
-        }
 
-        Member cachedMember = guild.getMemberById(event.getAuthor().getId());
+        Member cachedMember = guild.getMemberById(userId);
         if (cachedMember != null) {
             return cachedMember;
         }
 
         try {
-            return guild.retrieveMemberById(event.getAuthor().getId()).complete();
+            return guild.retrieveMemberById(userId).complete();
         } catch (RuntimeException ignored) {
             return null;
         }
@@ -590,16 +668,40 @@ public class SalesReportCommandHandler {
             return false;
         }
 
+        return hasManageServerForDirectRunNow(event.getJDA(), event.getAuthor());
+    }
+
+    private boolean hasManageServerForDirectRunNow(SlashCommandInteractionEvent event) {
+        if (event == null) {
+            return false;
+        }
+
+        if (event.isFromGuild()) {
+            return hasManageServer(event.getMember());
+        }
+
+        if (event.getJDA() == null) {
+            return false;
+        }
+
+        return hasManageServerForDirectRunNow(event.getJDA(), event.getUser());
+    }
+
+    private boolean hasManageServerForDirectRunNow(JDA jda, User user) {
+        if (jda == null || user == null) {
+            return false;
+        }
+
         if (!defaultGuildId.isBlank()) {
-            Guild configuredGuild = event.getJDA().getGuildById(defaultGuildId);
-            if (hasManageServer(resolveMemberForPermissionCheck(event, configuredGuild))) {
+            Guild configuredGuild = jda.getGuildById(defaultGuildId);
+            if (hasManageServer(resolveMemberForPermissionCheck(user.getId(), configuredGuild))) {
                 return true;
             }
         }
 
-        List<Guild> mutualGuilds = event.getJDA().getMutualGuilds(event.getAuthor());
+        List<Guild> mutualGuilds = jda.getMutualGuilds(user);
         for (Guild guild : mutualGuilds) {
-            if (hasManageServer(resolveMemberForPermissionCheck(event, guild))) {
+            if (hasManageServer(resolveMemberForPermissionCheck(user.getId(), guild))) {
                 return true;
             }
         }
