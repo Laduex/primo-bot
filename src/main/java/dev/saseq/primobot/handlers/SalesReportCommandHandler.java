@@ -370,9 +370,7 @@ public class SalesReportCommandHandler {
             return true;
         }
 
-        Guild guild = event.isFromGuild() ? event.getGuild() : resolveAdminGuild(event);
-        Member member = resolveMemberForPermissionCheck(event, guild);
-        if (!hasManageServer(member)) {
+        if (!hasManageServerForDirectRunNow(event)) {
             event.getMessage().reply("You need Manage Server permission to run `sales run now`.").queue();
             return true;
         }
@@ -559,23 +557,6 @@ public class SalesReportCommandHandler {
         return new DirectRunNowRequest(suffix, false);
     }
 
-    private Guild resolveAdminGuild(MessageReceivedEvent event) {
-        if (event == null || event.getJDA() == null) {
-            return null;
-        }
-        if (!defaultGuildId.isBlank()) {
-            Guild configured = event.getJDA().getGuildById(defaultGuildId);
-            if (configured != null) {
-                return configured;
-            }
-        }
-        List<Guild> mutualGuilds = event.getJDA().getMutualGuilds(event.getAuthor());
-        if (!mutualGuilds.isEmpty()) {
-            return mutualGuilds.get(0);
-        }
-        return event.getJDA().getGuilds().isEmpty() ? null : event.getJDA().getGuilds().get(0);
-    }
-
     private Member resolveMemberForPermissionCheck(MessageReceivedEvent event, Guild guild) {
         if (event == null || guild == null) {
             return null;
@@ -594,6 +575,36 @@ public class SalesReportCommandHandler {
         } catch (RuntimeException ignored) {
             return null;
         }
+    }
+
+    private boolean hasManageServerForDirectRunNow(MessageReceivedEvent event) {
+        if (event == null) {
+            return false;
+        }
+
+        if (event.isFromGuild()) {
+            return hasManageServer(event.getMember());
+        }
+
+        if (event.getJDA() == null) {
+            return false;
+        }
+
+        if (!defaultGuildId.isBlank()) {
+            Guild configuredGuild = event.getJDA().getGuildById(defaultGuildId);
+            if (hasManageServer(resolveMemberForPermissionCheck(event, configuredGuild))) {
+                return true;
+            }
+        }
+
+        List<Guild> mutualGuilds = event.getJDA().getMutualGuilds(event.getAuthor());
+        for (Guild guild : mutualGuilds) {
+            if (hasManageServer(resolveMemberForPermissionCheck(event, guild))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private String resolveRequestedAccountId(SalesReportConfig config, String rawAccountQuery) {
