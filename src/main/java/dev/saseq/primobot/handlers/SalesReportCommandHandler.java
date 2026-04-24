@@ -7,14 +7,18 @@ import dev.saseq.primobot.sales.SalesReportConfigStore;
 import dev.saseq.primobot.sales.SalesReportExecutorService;
 import dev.saseq.primobot.sales.SalesReportSchedulerService;
 import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
@@ -32,16 +36,23 @@ import java.util.regex.Pattern;
 @Component
 public class SalesReportCommandHandler {
     private static final int DISCORD_AUTOCOMPLETE_MAX_CHOICES = 25;
-    private static final Pattern SNOWFLAKE_PATTERN = Pattern.compile("\\d+");
     private static final DateTimeFormatter SLOT_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+    private static final Pattern DIRECT_RUN_NOW_PATTERN =
+            Pattern.compile("(?i)^sales\\s+run\\s+now(?:\\s+(.*))?$");
 
     private final SalesReportConfigStore configStore;
+    private final SalesReportExecutorService executorService;
     private final SalesReportSchedulerService schedulerService;
+    private final String defaultGuildId;
 
     public SalesReportCommandHandler(SalesReportConfigStore configStore,
-                                     SalesReportSchedulerService schedulerService) {
+                                     SalesReportExecutorService executorService,
+                                     SalesReportSchedulerService schedulerService,
+                                     @Value("${DISCORD_GUILD_ID:}") String defaultGuildId) {
         this.configStore = configStore;
+        this.executorService = executorService;
         this.schedulerService = schedulerService;
+        this.defaultGuildId = defaultGuildId == null ? "" : defaultGuildId.trim();
     }
 
     public void handle(SlashCommandInteractionEvent event) {
@@ -345,6 +356,63 @@ public class SalesReportCommandHandler {
         event.replyChoices(choices).queue();
     }
 
+    public boolean handleDirectRunNowMessage(MessageReceivedEvent event) {
+        if (event == null || event.getAuthor().isBot()) {
+            return false;
+        }
+
+        DirectRunNowRequest request = parseDirectRunNowRequest(event.getMessage().getContentRaw());
+        if (request == null) {
+            return false;
+        }
+        if (request.malformed()) {
+            event.getMessage().reply("Usage: `sales run now` or `sales run now account <account-id-or-name>`.").queue();
+            return true;
+        }
+
+        Guild guild = event.isFromGuild() ? event.getGuild() : resolveAdminGuild(event);
+        Member member = resolveMemberForPermissionCheck(event, guild);
+        if (!hasManageServer(member)) {
+            event.getMessage().reply("You need Manage Server permission to run `sales run now`.").queue();
+            return true;
+        }
+
+        SalesReportConfig config = configStore.getSnapshot();
+        String selectedAccountId = resolveRequestedAccountId(config, request.accountQuery());
+        if (!request.accountQuery().isBlank() && selectedAccountId.isBlank()) {
+            event.getMessage().reply("No account found for `%s`. Use `/sales-report list-accounts` to check valid account IDs."
+                            .formatted(request.accountQuery()))
+                    .queue();
+            return true;
+        }
+
+        var channel = event.getChannel();
+        String scopeLabel = selectedAccountId.isBlank()
+                ? "all enabled accounts"
+                : "account `%s`".formatted(selectedAccountId);
+        channel.sendMessage("Running sales report now for %s...".formatted(scopeLabel))
+                .queue();
+
+        CompletableFuture
+                .supplyAsync(() -> executorService.executeDirect(configStore.getSnapshot(),
+                        selectedAccountId,
+                        channel,
+                        false))
+                .whenComplete((result, error) -> {
+                    if (error != null) {
+                        Throwable cause = error.getCause() != null ? error.getCause() : error;
+                        String message = cause.getMessage();
+                        if (message == null || message.isBlank()) {
+                            message = "Unknown error";
+                        }
+                        channel.sendMessage("Failed to send sales report: " + message).queue();
+                        return;
+                    }
+                    replyDirectRunNowResult(channel, result);
+                });
+        return true;
+    }
+
     private void handleRunNow(SlashCommandInteractionEvent event) {
         String overrideTargetId = "";
         OptionMapping targetOption = event.getOption("target");
@@ -416,6 +484,144 @@ public class SalesReportCommandHandler {
                         replyRunNowResult(hook, result);
                     });
         });
+    }
+
+    private void replyDirectRunNowResult(MessageChannel channel,
+                                         SalesReportExecutorService.DispatchResult result) {
+        switch (result.status()) {
+            case SENT -> {
+                String scopeLabel = result.accountId() == null || result.accountId().isBlank()
+                        ? "all enabled accounts"
+                        : "account `%s`".formatted(result.accountId());
+                channel.sendMessage("Sales report sent here for %s. Success: `%d`, Failed: `%d`."
+                                .formatted(scopeLabel, result.successCount(), result.failureCount()))
+                        .queue();
+            }
+            case ACCOUNT_NOT_FOUND -> {
+                String accountId = result.accountId() == null ? "" : result.accountId().trim();
+                if (accountId.isBlank()) {
+                    channel.sendMessage("No matching account was found. Run `/sales-report list-accounts` to check valid account IDs.")
+                            .queue();
+                } else {
+                    channel.sendMessage("No account found for id `%s`. Run `/sales-report list-accounts` to check valid account IDs."
+                                    .formatted(accountId))
+                            .queue();
+                }
+            }
+            case SEND_FAILED, TARGET_NOT_FOUND, TARGET_NOT_CONFIGURED, GUILD_NOT_FOUND -> {
+                String message = result.message();
+                if (message == null || message.isBlank()) {
+                    message = "Unknown error";
+                }
+                channel.sendMessage("Failed to send sales report: " + message).queue();
+            }
+        }
+    }
+
+    private DirectRunNowRequest parseDirectRunNowRequest(String rawMessage) {
+        if (rawMessage == null || rawMessage.isBlank()) {
+            return null;
+        }
+
+        String normalized = rawMessage.trim().replaceAll("\\s+", " ");
+        var matcher = DIRECT_RUN_NOW_PATTERN.matcher(normalized);
+        if (!matcher.matches()) {
+            return null;
+        }
+
+        String suffix = matcher.group(1) == null ? "" : matcher.group(1).trim();
+        if (suffix.isBlank() || "all".equalsIgnoreCase(suffix)) {
+            return new DirectRunNowRequest("", false);
+        }
+
+        boolean explicitSingleAccountSyntax = false;
+        String lowered = suffix.toLowerCase(Locale.ENGLISH);
+        if (lowered.startsWith("account")) {
+            explicitSingleAccountSyntax = true;
+            suffix = suffix.substring("account".length()).trim();
+            if (suffix.startsWith(":")) {
+                suffix = suffix.substring(1).trim();
+            }
+        } else if (lowered.startsWith("single")) {
+            explicitSingleAccountSyntax = true;
+            suffix = suffix.substring("single".length()).trim();
+            if (suffix.startsWith("account")) {
+                suffix = suffix.substring("account".length()).trim();
+                if (suffix.startsWith(":")) {
+                    suffix = suffix.substring(1).trim();
+                }
+            }
+        }
+
+        if (suffix.isBlank() && explicitSingleAccountSyntax) {
+            return new DirectRunNowRequest("", true);
+        }
+        return new DirectRunNowRequest(suffix, false);
+    }
+
+    private Guild resolveAdminGuild(MessageReceivedEvent event) {
+        if (event == null || event.getJDA() == null) {
+            return null;
+        }
+        if (!defaultGuildId.isBlank()) {
+            Guild configured = event.getJDA().getGuildById(defaultGuildId);
+            if (configured != null) {
+                return configured;
+            }
+        }
+        List<Guild> mutualGuilds = event.getJDA().getMutualGuilds(event.getAuthor());
+        if (!mutualGuilds.isEmpty()) {
+            return mutualGuilds.get(0);
+        }
+        return event.getJDA().getGuilds().isEmpty() ? null : event.getJDA().getGuilds().get(0);
+    }
+
+    private Member resolveMemberForPermissionCheck(MessageReceivedEvent event, Guild guild) {
+        if (event == null || guild == null) {
+            return null;
+        }
+        if (event.isFromGuild() && event.getMember() != null) {
+            return event.getMember();
+        }
+
+        Member cachedMember = guild.getMemberById(event.getAuthor().getId());
+        if (cachedMember != null) {
+            return cachedMember;
+        }
+
+        try {
+            return guild.retrieveMemberById(event.getAuthor().getId()).complete();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private String resolveRequestedAccountId(SalesReportConfig config, String rawAccountQuery) {
+        if (config == null || config.getAccounts() == null) {
+            return "";
+        }
+        String query = rawAccountQuery == null ? "" : rawAccountQuery.trim();
+        if (query.isBlank() || "all".equalsIgnoreCase(query)) {
+            return "";
+        }
+
+        for (SalesAccountConfig account : config.getAccounts()) {
+            if (account != null
+                    && account.getId() != null
+                    && query.equalsIgnoreCase(account.getId().trim())) {
+                return account.getId().trim();
+            }
+        }
+        for (SalesAccountConfig account : config.getAccounts()) {
+            if (account != null
+                    && account.getName() != null
+                    && query.equalsIgnoreCase(account.getName().trim())
+                    && account.getId() != null
+                    && !account.getId().isBlank()) {
+                return account.getId().trim();
+            }
+        }
+        return "";
     }
 
     private void replyRunNowResult(InteractionHook hook, SalesReportExecutorService.DispatchResult result) {
@@ -871,5 +1077,8 @@ public class SalesReportCommandHandler {
     private String defaultAccountId(SalesPlatform platform) {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         return platform.name().toLowerCase(Locale.ENGLISH) + "-" + suffix;
+    }
+
+    private record DirectRunNowRequest(String accountQuery, boolean malformed) {
     }
 }

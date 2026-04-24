@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.concrete.ForumChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import org.springframework.stereotype.Component;
 
@@ -43,21 +44,13 @@ public class SalesReportExecutorService {
             return new DispatchResult(DispatchStatus.TARGET_NOT_CONFIGURED, "", "", "No target channel configured", 0, 0);
         }
 
-        SalesReportConfig effectiveConfig = filterConfigByAccount(config, selectedAccountId);
-        if (effectiveConfig == null) {
-            return new DispatchResult(DispatchStatus.ACCOUNT_NOT_FOUND, targetId, selectedAccountId, "Account not found", 0, 0);
+        PreparedDispatch prepared = prepareDispatch(config, selectedAccountId, dailyOverview);
+        if (prepared.result() != null) {
+            return prepared.result();
         }
 
-        ZoneId zoneId = resolveZoneId(effectiveConfig.getTimezone());
-        SalesReportSnapshot snapshot = aggregatorService.aggregate(effectiveConfig, zoneId);
-        String content = messageBuilder.buildMessage(
-                snapshot,
-                effectiveConfig.getMessageTone(),
-                effectiveConfig.getSignature(),
-                dailyOverview);
-
         try {
-            List<String> chunks = DiscordMessageUtils.chunkMessage(content, DISCORD_MESSAGE_MAX_LENGTH);
+            List<String> chunks = DiscordMessageUtils.chunkMessage(prepared.content(), DISCORD_MESSAGE_MAX_LENGTH);
             TextChannel textTarget = guild.getTextChannelById(targetId);
             if (textTarget != null) {
                 for (String chunk : chunks) {
@@ -69,7 +62,7 @@ public class SalesReportExecutorService {
                     return new DispatchResult(DispatchStatus.TARGET_NOT_FOUND, targetId, selectedAccountId, "Target channel not found", 0, 0);
                 }
 
-                String title = buildForumPostTitle(zoneId, selectedAccountId, dailyOverview);
+                String title = buildForumPostTitle(prepared.zoneId(), selectedAccountId, dailyOverview);
                 ThreadChannel thread = forumTarget.createForumPost(title, MessageCreateData.fromContent(chunks.get(0)))
                         .complete()
                         .getThreadChannel();
@@ -78,12 +71,68 @@ public class SalesReportExecutorService {
                 }
             }
 
-            int successes = (int) snapshot.accountResults().stream().filter(SalesAccountResult::success).count();
-            int failures = (int) snapshot.accountResults().stream().filter(result -> !result.success()).count();
-            return new DispatchResult(DispatchStatus.SENT, targetId, selectedAccountId, "Sent", successes, failures);
+            return new DispatchResult(DispatchStatus.SENT,
+                    targetId,
+                    selectedAccountId,
+                    "Sent",
+                    prepared.successCount(),
+                    prepared.failureCount());
         } catch (Exception ex) {
             return new DispatchResult(DispatchStatus.SEND_FAILED, targetId, selectedAccountId, ex.getMessage(), 0, 0);
         }
+    }
+
+    public DispatchResult executeDirect(SalesReportConfig config,
+                                        String selectedAccountId,
+                                        MessageChannel destination,
+                                        boolean dailyOverview) {
+        if (destination == null) {
+            return new DispatchResult(DispatchStatus.SEND_FAILED, "", selectedAccountId, "No destination channel", 0, 0);
+        }
+
+        PreparedDispatch prepared = prepareDispatch(config, selectedAccountId, dailyOverview);
+        if (prepared.result() != null) {
+            return prepared.result();
+        }
+
+        try {
+            List<String> chunks = DiscordMessageUtils.chunkMessage(prepared.content(), DISCORD_MESSAGE_MAX_LENGTH);
+            for (String chunk : chunks) {
+                destination.sendMessage(chunk).complete();
+            }
+            return new DispatchResult(DispatchStatus.SENT,
+                    destination.getId(),
+                    selectedAccountId,
+                    "Sent",
+                    prepared.successCount(),
+                    prepared.failureCount());
+        } catch (Exception ex) {
+            return new DispatchResult(DispatchStatus.SEND_FAILED, destination.getId(), selectedAccountId, ex.getMessage(), 0, 0);
+        }
+    }
+
+    private PreparedDispatch prepareDispatch(SalesReportConfig config,
+                                             String selectedAccountId,
+                                             boolean dailyOverview) {
+        SalesReportConfig effectiveConfig = filterConfigByAccount(config, selectedAccountId);
+        if (effectiveConfig == null) {
+            return new PreparedDispatch(null,
+                    0,
+                    0,
+                    null,
+                    new DispatchResult(DispatchStatus.ACCOUNT_NOT_FOUND, "", selectedAccountId, "Account not found", 0, 0));
+        }
+
+        ZoneId zoneId = resolveZoneId(effectiveConfig.getTimezone());
+        SalesReportSnapshot snapshot = aggregatorService.aggregate(effectiveConfig, zoneId);
+        String content = messageBuilder.buildMessage(
+                snapshot,
+                effectiveConfig.getMessageTone(),
+                effectiveConfig.getSignature(),
+                dailyOverview);
+        int successes = (int) snapshot.accountResults().stream().filter(SalesAccountResult::success).count();
+        int failures = (int) snapshot.accountResults().stream().filter(result -> !result.success()).count();
+        return new PreparedDispatch(content, successes, failures, zoneId, null);
     }
 
     private String resolveTargetChannelId(SalesReportConfig config,
@@ -183,5 +232,12 @@ public class SalesReportExecutorService {
         public boolean sent() {
             return status == DispatchStatus.SENT;
         }
+    }
+
+    private record PreparedDispatch(String content,
+                                    int successCount,
+                                    int failureCount,
+                                    ZoneId zoneId,
+                                    DispatchResult result) {
     }
 }

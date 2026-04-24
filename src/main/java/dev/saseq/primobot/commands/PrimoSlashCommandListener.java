@@ -69,6 +69,9 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
+        if (salesReportCommandHandler.handleDirectRunNowMessage(event)) {
+            return;
+        }
         orderCommandHandler.handleMessage(event);
     }
 

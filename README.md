@@ -12,6 +12,7 @@ Standalone Discord bot service for Primo operations slash commands.
 - `/order-remind` admin command to manually send a reminder now for one configured forum route
 - Daily branch reminders for unarchived order threads with friendly greeting and wiki-style links
 - `/sales-report` admin command for scheduled multi-account UTAK and Loyverse sales broadcasts
+- Admin direct chat shortcut: send `sales run now` (or `sales run now account <account-id-or-name>`) to Primo and it sends the sales report directly in that chat
 - Guild-specific command registration support via `DISCORD_GUILD_ID`
 - Health endpoint on port `8086`
 
@@ -132,6 +133,13 @@ Admin-only shortcut command for sending reports immediately.
 - `run-now target:<text-or-forum-channel> scope:<all|single> account:<optional>`
 - If `scope:all`, report sends for all enabled accounts
 - If `scope:single`, pick account using autocomplete by name
+
+## Admin direct chat sales trigger
+
+Admins (Manage Server permission) can also send plain text to Primo:
+
+- `sales run now` -> runs all enabled accounts and sends the report directly in that chat
+- `sales run now account <account-id-or-name>` -> runs a single account and sends it directly in that chat
 
 ## Run locally
 
