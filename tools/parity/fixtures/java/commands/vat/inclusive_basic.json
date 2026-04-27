@@ -1,0 +1,13 @@
+{
+  "input" : {
+    "amount" : "1120.00",
+    "basis" : "INCLUSIVE",
+    "vatRatePercent" : "12"
+  },
+  "output" : {
+    "basisLabel" : "Gross (VAT Inclusive)",
+    "grossAmount" : "1120.00",
+    "netAmount" : "1000.00",
+    "vatAmount" : "120.00"
+  }
+}

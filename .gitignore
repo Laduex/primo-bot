@@ -37,6 +37,11 @@ build/
 ### Mac OS ###
 .DS_Store
 
+### Python ###
+__pycache__/
+*.pyc
+.venv/
+
 ## Claude
 .claude
 AGENTS.md

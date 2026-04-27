@@ -31,3 +31,26 @@ services:
       timeout: 3s
       retries: 3
       start_period: 20s
+
+  primo-bot-python-canary:
+    container_name: primo-bot-python-canary
+    profiles:
+      - python-canary
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    image: saseq/primo-bot-python-canary:latest
+    restart: unless-stopped
+    ports:
+      - "18086:8086"
+    env_file:
+      - .env
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8086/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s

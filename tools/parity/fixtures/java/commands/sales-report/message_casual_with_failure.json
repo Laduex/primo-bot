@@ -1,0 +1,11 @@
+{
+  "input" : {
+    "dailyOverview" : false,
+    "generatedAt" : "2026-04-22T09:00:00",
+    "signature" : "Thanks, Primo",
+    "tone" : "casual"
+  },
+  "output" : {
+    "message" : "Good Morning, team! Here's your sales update.\n\n- **UTAK Main**: `PHP 1,000.50`\n\n**Grand Total:** `PHP 1,000.50`\n\nHeads up: I couldn't fetch some accounts this run. I'll try again on the next schedule:\n- Loyverse Main (Loyverse): couldn't fetch sales right now.\n\n\nThanks, Primo"
+  }
+}

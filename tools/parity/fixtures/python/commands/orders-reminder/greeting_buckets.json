@@ -1,0 +1,16 @@
+{
+  "cases": [
+    {
+      "greeting": "Good Morning",
+      "time": "05:00"
+    },
+    {
+      "greeting": "Good Afternoon",
+      "time": "12:00"
+    },
+    {
+      "greeting": "Good Evening",
+      "time": "18:00"
+    }
+  ]
+}

@@ -157,3 +157,15 @@ Health check:
 ```bash
 docker compose up -d --build
 ```
+
+## Python Canary Deploy (Non-Disruptive)
+
+To run the Python branch as a sidecar canary without replacing the Java bot:
+
+```bash
+docker compose --profile python-canary up -d --build primo-bot-python-canary
+```
+
+Canary health check:
+
+- `http://localhost:18086/actuator/health`

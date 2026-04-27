@@ -1,0 +1,13 @@
+{
+  "input" : {
+    "amount" : "1000.00",
+    "basis" : "EXCLUSIVE",
+    "vatRatePercent" : "12"
+  },
+  "output" : {
+    "basisLabel" : "Net (VAT Exclusive)",
+    "grossAmount" : "1120.00",
+    "netAmount" : "1000.00",
+    "vatAmount" : "120.00"
+  }
+}
