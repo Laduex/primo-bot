@@ -182,7 +182,19 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
         if (!proof.isBlank()) {
             builder.queryParam("appsecret_proof", proof);
         }
-        return builder.build(false).encode().toUriString();
+        String encoded = builder.build(false).encode().toUriString();
+        return decodeGraphFieldBraces(encoded);
+    }
+
+    private String decodeGraphFieldBraces(String value) {
+        if (value == null || value.isBlank()) {
+            return value == null ? "" : value;
+        }
+        return value
+                .replace("%7B", "{")
+                .replace("%7D", "}")
+                .replace("%7b", "{")
+                .replace("%7d", "}");
     }
 
     private String appSecretProof(String token) {
