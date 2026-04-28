@@ -125,7 +125,7 @@ class MetaGraphApiClientTest {
         assertEquals(2, unread.get(0).unreadCount());
         assertEquals("instagram", unread.get(0).platform());
         assertEquals("t_3", unread.get(1).conversationId());
-        assertTrue(urls.get(0).contains("limit=25"));
+        assertTrue(urls.get(0).contains("limit=5"));
     }
 
     private JsonNode json(String raw) {

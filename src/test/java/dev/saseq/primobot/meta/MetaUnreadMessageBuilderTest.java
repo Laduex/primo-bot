@@ -61,11 +61,13 @@ class MetaUnreadMessageBuilderTest {
         assertTrue(message.contains("**Recent Unread Conversations**"));
         assertTrue(message.contains("1.\n   Name: Customer A"));
         assertTrue(message.contains("Platform: Messenger (account)"));
+        assertTrue(message.contains("Unread Messages: `3`"));
         assertTrue(message.contains("Snippet: Need price list"));
         assertTrue(message.contains("Time Received: `2026-04-25T03:00:00+0000`"));
         assertTrue(message.contains("Days Ago: `"));
         assertTrue(message.contains("2.\n   Name: Customer B"));
         assertTrue(message.contains("Platform: Instagram"));
+        assertTrue(message.contains("Unread Messages: `2`"));
         assertTrue(message.contains("Snippet: Can I order?"));
         assertTrue(message.contains("**Instagram Warnings**"));
     }
@@ -103,7 +105,8 @@ class MetaUnreadMessageBuilderTest {
 
         assertTrue(message.contains("...and `65` more unread conversation(s)."));
         assertTrue(chunks.size() > 1);
-        assertEquals(message.length(), chunks.stream().mapToInt(String::length).sum());
+        assertTrue(chunks.stream().allMatch(chunk -> chunk.length() <= 2000));
+        assertEquals(message, String.join("\n", chunks));
     }
 
     @Test

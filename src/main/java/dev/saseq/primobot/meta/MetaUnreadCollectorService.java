@@ -8,6 +8,8 @@ import java.util.List;
 
 @Component
 public class MetaUnreadCollectorService {
+    private static final int MAX_UNREAD_CONVERSATIONS_PER_PLATFORM = 5;
+
     private final MetaUnreadApiClient apiClient;
 
     public MetaUnreadCollectorService(MetaUnreadApiClient apiClient) {
@@ -18,10 +20,25 @@ public class MetaUnreadCollectorService {
         List<MetaPageAccess> pages = apiClient.listPages();
         List<MetaUnreadConversation> allConversations = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        int facebookUnreadConversations = 0;
+        int instagramUnreadConversations = 0;
 
         for (MetaPageAccess page : pages) {
-            allConversations.addAll(collectPlatformUnread(page, "facebook", warnings));
-            allConversations.addAll(collectPlatformUnread(page, "instagram", warnings));
+            List<MetaUnreadConversation> facebookUnread = collectPlatformUnread(
+                    page,
+                    "facebook",
+                    MAX_UNREAD_CONVERSATIONS_PER_PLATFORM - facebookUnreadConversations,
+                    warnings);
+            facebookUnreadConversations += facebookUnread.size();
+            allConversations.addAll(facebookUnread);
+
+            List<MetaUnreadConversation> instagramUnread = collectPlatformUnread(
+                    page,
+                    "instagram",
+                    MAX_UNREAD_CONVERSATIONS_PER_PLATFORM - instagramUnreadConversations,
+                    warnings);
+            instagramUnreadConversations += instagramUnread.size();
+            allConversations.addAll(instagramUnread);
         }
 
         allConversations.sort(Comparator
@@ -44,9 +61,20 @@ public class MetaUnreadCollectorService {
         );
     }
 
-    private List<MetaUnreadConversation> collectPlatformUnread(MetaPageAccess page, String platform, List<String> warnings) {
+    private List<MetaUnreadConversation> collectPlatformUnread(MetaPageAccess page,
+                                                               String platform,
+                                                               int remainingLimit,
+                                                               List<String> warnings) {
+        if (remainingLimit <= 0) {
+            return List.of();
+        }
+
         try {
-            return apiClient.listUnreadConversations(page, platform);
+            List<MetaUnreadConversation> conversations = apiClient.listUnreadConversations(page, platform);
+            if (conversations.size() <= remainingLimit) {
+                return conversations;
+            }
+            return List.copyOf(conversations.subList(0, remainingLimit));
         } catch (MetaGraphApiException ex) {
             warnings.add("%s unread check failed for `%s`: %s"
                     .formatted(displayPlatform(platform), page.pageName(), ex.briefMessage()));

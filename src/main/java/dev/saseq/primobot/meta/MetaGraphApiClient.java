@@ -25,6 +25,8 @@ import javax.crypto.spec.SecretKeySpec;
 public class MetaGraphApiClient implements MetaUnreadApiClient {
     private static final String PAGES_FIELDS = "id,name,access_token,instagram_business_account";
     private static final String CONVERSATION_FIELDS = "id,updated_time,snippet,unread_count,senders";
+    private static final int CONVERSATION_PAGE_LIMIT = 5;
+    private static final int MAX_UNREAD_CONVERSATIONS_PER_PAGE_PLATFORM = 5;
 
     private final String apiBaseUrl;
     private final String graphVersion;
@@ -113,7 +115,7 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
         while (true) {
             Map<String, String> params = new LinkedHashMap<>();
             params.put("fields", CONVERSATION_FIELDS);
-            params.put("limit", "25");
+            params.put("limit", Integer.toString(CONVERSATION_PAGE_LIMIT));
             if ("instagram".equals(normalizedPlatform)) {
                 params.put("platform", "instagram");
             }
@@ -140,11 +142,14 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
                             unreadCount,
                             text(node, "updated_time")
                     ));
+                    if (unread.size() >= MAX_UNREAD_CONVERSATIONS_PER_PAGE_PLATFORM) {
+                        break;
+                    }
                 }
             }
 
             after = nextAfterCursor(root);
-            if (after.isBlank()) {
+            if (after.isBlank() || unread.size() >= MAX_UNREAD_CONVERSATIONS_PER_PAGE_PLATFORM) {
                 break;
             }
         }
