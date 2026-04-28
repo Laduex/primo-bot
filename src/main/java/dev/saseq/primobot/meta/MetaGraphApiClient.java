@@ -23,7 +23,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 @Component
 public class MetaGraphApiClient implements MetaUnreadApiClient {
-    private static final String PAGES_FIELDS = "id,name,access_token,instagram_business_account{id,username}";
+    private static final String PAGES_FIELDS = "id,name,access_token,instagram_business_account";
     private static final String CONVERSATION_FIELDS = "id,updated_time,snippet,unread_count,senders";
 
     private final String apiBaseUrl;
@@ -183,19 +183,7 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
         if (!proof.isBlank()) {
             builder.queryParam("appsecret_proof", proof);
         }
-        String encoded = builder.build(false).encode().toUriString();
-        return decodeGraphFieldBraces(encoded);
-    }
-
-    private String decodeGraphFieldBraces(String value) {
-        if (value == null || value.isBlank()) {
-            return value == null ? "" : value;
-        }
-        return value
-                .replace("%7B", "{")
-                .replace("%7D", "}")
-                .replace("%7b", "{")
-                .replace("%7d", "}");
+        return builder.build(false).encode().toUriString();
     }
 
     private String appSecretProof(String token) {

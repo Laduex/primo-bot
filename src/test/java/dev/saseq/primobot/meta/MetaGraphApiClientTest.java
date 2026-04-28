@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetaGraphApiClientTest {
@@ -53,7 +54,9 @@ class MetaGraphApiClientTest {
         assertEquals("240494126582711", pages.get(1).pageId());
         assertEquals(2, urls.size());
         assertTrue(urls.get(0).contains("/v24.0/me/accounts"));
-        assertTrue(urls.get(0).contains("instagram_business_account{id,username}"));
+        assertTrue(urls.get(0).contains("instagram_business_account"));
+        assertFalse(urls.get(0).contains("%7B"));
+        assertFalse(urls.get(0).contains("{"));
     }
 
     @Test
