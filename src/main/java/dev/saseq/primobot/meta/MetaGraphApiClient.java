@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -309,7 +310,7 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
         public JsonNode get(String url, ObjectMapper objectMapper) {
             try {
                 return restClient.get()
-                        .uri(url)
+                        .uri(URI.create(url))
                         .exchange((request, response) -> {
                             String body = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
                             int status = response.getStatusCode().value();
