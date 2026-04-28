@@ -2,7 +2,6 @@ package dev.saseq.primobot.commands;
 
 import dev.saseq.primobot.handlers.CompletedCommandHandler;
 import dev.saseq.primobot.handlers.ForumAutoMentionHandler;
-import dev.saseq.primobot.handlers.MetaUnreadCommandHandler;
 import dev.saseq.primobot.handlers.OrderCommandHandler;
 import dev.saseq.primobot.handlers.OrdersReminderCommandHandler;
 import dev.saseq.primobot.handlers.SalesReportCommandHandler;
@@ -22,22 +21,19 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
     private final OrdersReminderCommandHandler ordersReminderCommandHandler;
     private final SalesReportCommandHandler salesReportCommandHandler;
     private final ForumAutoMentionHandler forumAutoMentionHandler;
-    private final MetaUnreadCommandHandler metaUnreadCommandHandler;
 
     public PrimoSlashCommandListener(VatCommandHandler vatCommandHandler,
                                      OrderCommandHandler orderCommandHandler,
                                      CompletedCommandHandler completedCommandHandler,
                                      OrdersReminderCommandHandler ordersReminderCommandHandler,
                                      SalesReportCommandHandler salesReportCommandHandler,
-                                     ForumAutoMentionHandler forumAutoMentionHandler,
-                                     MetaUnreadCommandHandler metaUnreadCommandHandler) {
+                                     ForumAutoMentionHandler forumAutoMentionHandler) {
         this.vatCommandHandler = vatCommandHandler;
         this.orderCommandHandler = orderCommandHandler;
         this.completedCommandHandler = completedCommandHandler;
         this.ordersReminderCommandHandler = ordersReminderCommandHandler;
         this.salesReportCommandHandler = salesReportCommandHandler;
         this.forumAutoMentionHandler = forumAutoMentionHandler;
-        this.metaUnreadCommandHandler = metaUnreadCommandHandler;
     }
 
     @Override
@@ -69,9 +65,6 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
         if (PrimoCommands.COMMAND_SALES.equals(event.getName())) {
             salesReportCommandHandler.handle(event);
             return;
-        }
-        if (PrimoCommands.COMMAND_META_UNREAD.equals(event.getName())) {
-            metaUnreadCommandHandler.handle(event);
         }
     }
 

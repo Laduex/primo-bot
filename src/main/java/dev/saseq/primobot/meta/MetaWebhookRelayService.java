@@ -32,7 +32,6 @@ public class MetaWebhookRelayService {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final JDA jda;
-    private final MetaUnreadConfigStore metaUnreadConfigStore;
     private final MetaWebhookEventExtractor eventExtractor;
     private final String defaultGuildId;
     private final String verifyToken;
@@ -40,14 +39,12 @@ public class MetaWebhookRelayService {
     private final String appSecret;
 
     public MetaWebhookRelayService(@Lazy JDA jda,
-                                   MetaUnreadConfigStore metaUnreadConfigStore,
                                    MetaWebhookEventExtractor eventExtractor,
                                    @Value("${DISCORD_GUILD_ID:}") String defaultGuildId,
                                    @Value("${META_WEBHOOK_VERIFY_TOKEN:}") String verifyToken,
                                    @Value("${META_WEBHOOK_TARGET_CHANNEL_ID:}") String fallbackTargetChannelId,
                                    @Value("${META_APP_SECRET:}") String appSecret) {
         this.jda = jda;
-        this.metaUnreadConfigStore = metaUnreadConfigStore;
         this.eventExtractor = eventExtractor;
         this.defaultGuildId = safeTrim(defaultGuildId);
         this.verifyToken = safeTrim(verifyToken);
@@ -211,11 +208,6 @@ public class MetaWebhookRelayService {
     }
 
     private String resolveTargetChannelId() {
-        MetaUnreadConfig config = metaUnreadConfigStore.getSnapshot();
-        String configTarget = safeTrim(config == null ? "" : config.getTargetChannelId());
-        if (!configTarget.isBlank()) {
-            return configTarget;
-        }
         return fallbackTargetChannelId;
     }
 

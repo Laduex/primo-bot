@@ -35,12 +35,11 @@ public class PrimoBotConfig {
         CommandData ordersReminderCommand = PrimoCommands.buildOrdersReminderSlashCommand();
         CommandData salesReportCommand = PrimoCommands.buildSalesReportSlashCommand();
         CommandData salesCommand = PrimoCommands.buildSalesSlashCommand();
-        CommandData metaUnreadCommand = PrimoCommands.buildMetaUnreadSlashCommand();
 
         if (defaultGuildId != null && !defaultGuildId.isBlank()) {
             Guild guild = jda.getGuildById(defaultGuildId);
             if (guild != null) {
-                syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand, salesReportCommand, salesCommand, metaUnreadCommand);
+                syncGuildCommands(guild, vatCommand, orderCommand, orderRemindCommand, completedCommand, ordersReminderCommand, salesReportCommand, salesCommand);
                 // Keep /sales as a global command so admins can trigger run-now in bot DMs.
                 jda.upsertCommand(salesCommand).queue();
                 deleteGlobalCommandsByName(jda, Set.of(
@@ -50,7 +49,7 @@ public class PrimoBotConfig {
                         PrimoCommands.COMMAND_COMPLETED,
                         PrimoCommands.COMMAND_ORDERS_REMINDER,
                         PrimoCommands.COMMAND_SALES_REPORT,
-                        PrimoCommands.COMMAND_META_UNREAD,
+                        "meta-unread",
                         "recipe",
                         "supplier",
                         "primo"
@@ -66,8 +65,7 @@ public class PrimoBotConfig {
         jda.upsertCommand(ordersReminderCommand).queue();
         jda.upsertCommand(salesReportCommand).queue();
         jda.upsertCommand(salesCommand).queue();
-        jda.upsertCommand(metaUnreadCommand).queue();
-        deleteGlobalCommandsByName(jda, Set.of("recipe", "supplier", "primo"));
+        deleteGlobalCommandsByName(jda, Set.of("meta-unread", "recipe", "supplier", "primo"));
         return jda;
     }
 
@@ -82,8 +80,7 @@ public class PrimoBotConfig {
                                    CommandData completedCommand,
                                    CommandData ordersReminderCommand,
                                    CommandData salesReportCommand,
-                                   CommandData salesCommand,
-                                   CommandData metaUnreadCommand) {
+                                   CommandData salesCommand) {
         guild.upsertCommand(vatCommand).queue();
         guild.upsertCommand(orderCommand).queue();
         guild.upsertCommand(orderRemindCommand).queue();
@@ -91,8 +88,7 @@ public class PrimoBotConfig {
         guild.upsertCommand(ordersReminderCommand).queue();
         guild.upsertCommand(salesReportCommand).queue();
         guild.upsertCommand(salesCommand).queue();
-        guild.upsertCommand(metaUnreadCommand).queue();
-        deleteGuildCommandsByName(guild, Set.of("recipe", "supplier", "primo"));
+        deleteGuildCommandsByName(guild, Set.of("meta-unread", "recipe", "supplier", "primo"));
     }
 
     private void deleteGlobalCommandsByName(JDA jda, Set<String> commandNames) {
