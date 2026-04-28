@@ -53,6 +53,7 @@ class MetaGraphApiClientTest {
         assertEquals("240494126582711", pages.get(1).pageId());
         assertEquals(2, urls.size());
         assertTrue(urls.get(0).contains("/v24.0/me/accounts"));
+        assertTrue(urls.get(0).contains("instagram_business_account%7Bid,username%7D"));
     }
 
     @Test

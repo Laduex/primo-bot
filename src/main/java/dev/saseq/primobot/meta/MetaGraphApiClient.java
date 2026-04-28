@@ -182,7 +182,7 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
         if (!proof.isBlank()) {
             builder.queryParam("appsecret_proof", proof);
         }
-        return builder.build(true).toUriString();
+        return builder.build(false).encode().toUriString();
     }
 
     private String appSecretProof(String token) {
