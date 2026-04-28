@@ -14,6 +14,7 @@ Standalone Discord bot service for Primo operations slash commands.
 - `/sales-report` admin command for scheduled multi-account UTAK and Loyverse sales broadcasts
 - Admin direct chat shortcut: send `sales run now` (or `sales run now account <account-id-or-name>`) to Primo and it sends the sales report directly in that chat
 - `/meta-unread` admin command for scheduled Meta unread digest checks (Facebook + Instagram where permission allows)
+- Meta webhook relay endpoint to push new Messenger/Instagram inbound chats into a Discord channel
 - Guild-specific command registration support via `DISCORD_GUILD_ID`
 - Health endpoint on port `8086`
 
@@ -65,6 +66,8 @@ Meta unread variables:
 - `META_UNREAD_DEFAULT_ENABLED` (default: `false`)
 - `META_UNREAD_DEFAULT_INTERVAL_MINUTES` (default: `15`)
 - `META_UNREAD_DEFAULT_TARGET_CHANNEL_ID` (default: empty)
+- `META_WEBHOOK_VERIFY_TOKEN` (required for Meta webhook verification challenge)
+- `META_WEBHOOK_TARGET_CHANNEL_ID` (optional fallback target for webhook relay if `/meta-unread set-channel` is not set)
 
 Example:
 
@@ -158,6 +161,19 @@ Meta unread behavior:
 - Reposts unread digest every interval until unread is cleared in Meta inbox
 - Silent when unread total is zero
 - Adds Instagram warning section in posted digest when IG permissions/capability are missing
+
+## Meta webhook relay
+
+When enabled in Meta App dashboard, incoming Messenger/Instagram chat events can be relayed directly to Discord.
+
+- Verify URL: `GET /webhooks/meta`
+- Event URL: `POST /webhooks/meta`
+- Verification token: `META_WEBHOOK_VERIFY_TOKEN`
+- Target channel resolution order:
+1. `/meta-unread set-channel` configured channel
+2. `META_WEBHOOK_TARGET_CHANNEL_ID` fallback
+- Supported Discord target types: text/news/thread direct send, forum post creation
+- If `META_APP_SECRET` is set, webhook payloads must include a valid `X-Hub-Signature-256` header
 
 ## `/sales` command
 
