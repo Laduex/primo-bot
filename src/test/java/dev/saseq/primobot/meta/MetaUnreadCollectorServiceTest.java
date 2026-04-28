@@ -57,4 +57,47 @@ class MetaUnreadCollectorServiceTest {
         assertEquals(1, snapshot.warnings().size());
         assertTrue(snapshot.warnings().get(0).contains("Instagram unread check failed"));
     }
+
+    @Test
+    void continuesWhenFacebookTimesOutAndKeepsInstagramUnread() {
+        MetaUnreadApiClient fakeClient = new MetaUnreadApiClient() {
+            @Override
+            public List<MetaPageAccess> listPages() {
+                return List.of(new MetaPageAccess(
+                        "240494126582711",
+                        "Primal Brew Cafe",
+                        "page-token",
+                        "17841467092463223",
+                        "primalbrew"
+                ));
+            }
+
+            @Override
+            public List<MetaUnreadConversation> listUnreadConversations(MetaPageAccess page, String platform) {
+                if ("facebook".equals(platform)) {
+                    throw new IllegalStateException("Meta API request failed: Request timed out");
+                }
+                return List.of(new MetaUnreadConversation(
+                        page.pageId(),
+                        page.pageName(),
+                        "instagram",
+                        "ig_123",
+                        "Customer B",
+                        "Hi",
+                        1,
+                        "2026-04-25T04:00:00+0000"
+                ));
+            }
+        };
+
+        MetaUnreadCollectorService service = new MetaUnreadCollectorService(fakeClient);
+        MetaUnreadSnapshot snapshot = service.collectUnread();
+
+        assertEquals(1, snapshot.pagesScanned());
+        assertEquals(1, snapshot.unreadThreadCount());
+        assertEquals(1, snapshot.unreadMessageCount());
+        assertEquals(1, snapshot.warnings().size());
+        assertTrue(snapshot.warnings().get(0).contains("Facebook unread check failed"));
+        assertTrue(snapshot.warnings().get(0).contains("Request timed out"));
+    }
 }

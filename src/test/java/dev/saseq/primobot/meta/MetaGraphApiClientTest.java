@@ -61,7 +61,9 @@ class MetaGraphApiClientTest {
 
     @Test
     void listUnreadConversationsFiltersUnreadAndPaginates() throws Exception {
+        List<String> urls = new ArrayList<>();
         MetaGraphApiClient.GraphTransport transport = (url, mapper) -> {
+            urls.add(url);
             if (url.contains("after=next-page")) {
                 return json("""
                         {
@@ -123,6 +125,7 @@ class MetaGraphApiClientTest {
         assertEquals(2, unread.get(0).unreadCount());
         assertEquals("instagram", unread.get(0).platform());
         assertEquals("t_3", unread.get(1).conversationId());
+        assertTrue(urls.get(0).contains("limit=25"));
     }
 
     private JsonNode json(String raw) {

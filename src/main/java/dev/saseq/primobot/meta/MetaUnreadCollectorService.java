@@ -20,14 +20,8 @@ public class MetaUnreadCollectorService {
         List<String> warnings = new ArrayList<>();
 
         for (MetaPageAccess page : pages) {
-            allConversations.addAll(apiClient.listUnreadConversations(page, "facebook"));
-
-            try {
-                allConversations.addAll(apiClient.listUnreadConversations(page, "instagram"));
-            } catch (MetaGraphApiException ex) {
-                warnings.add("Instagram unread check failed for `%s`: %s"
-                        .formatted(page.pageName(), ex.briefMessage()));
-            }
+            allConversations.addAll(collectPlatformUnread(page, "facebook", warnings));
+            allConversations.addAll(collectPlatformUnread(page, "instagram", warnings));
         }
 
         allConversations.sort(Comparator
@@ -48,5 +42,37 @@ public class MetaUnreadCollectorService {
                 List.copyOf(allConversations),
                 List.copyOf(warnings)
         );
+    }
+
+    private List<MetaUnreadConversation> collectPlatformUnread(MetaPageAccess page, String platform, List<String> warnings) {
+        try {
+            return apiClient.listUnreadConversations(page, platform);
+        } catch (MetaGraphApiException ex) {
+            warnings.add("%s unread check failed for `%s`: %s"
+                    .formatted(displayPlatform(platform), page.pageName(), ex.briefMessage()));
+        } catch (RuntimeException ex) {
+            warnings.add("%s unread check failed for `%s`: %s"
+                    .formatted(displayPlatform(platform), page.pageName(), briefRuntimeMessage(ex)));
+        }
+        return List.of();
+    }
+
+    private String displayPlatform(String platform) {
+        if (platform == null || platform.isBlank()) {
+            return "Meta";
+        }
+        return switch (platform.trim().toLowerCase()) {
+            case "facebook", "messenger" -> "Facebook";
+            case "instagram" -> "Instagram";
+            default -> platform;
+        };
+    }
+
+    private String briefRuntimeMessage(RuntimeException ex) {
+        String message = ex == null ? "" : ex.getMessage();
+        if (message == null || message.isBlank()) {
+            return "Unknown error";
+        }
+        return message.length() > 220 ? message.substring(0, 217) + "..." : message;
     }
 }

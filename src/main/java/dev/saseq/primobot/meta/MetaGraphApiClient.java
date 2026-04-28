@@ -113,7 +113,7 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
         while (true) {
             Map<String, String> params = new LinkedHashMap<>();
             params.put("fields", CONVERSATION_FIELDS);
-            params.put("limit", "100");
+            params.put("limit", "25");
             if ("instagram".equals(normalizedPlatform)) {
                 params.put("platform", "instagram");
             }
