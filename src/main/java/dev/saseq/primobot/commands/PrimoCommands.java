@@ -17,6 +17,7 @@ public final class PrimoCommands {
     public static final String COMMAND_ORDERS_REMINDER = "orders-reminder";
     public static final String COMMAND_SALES_REPORT = "sales-report";
     public static final String COMMAND_SALES = "sales";
+    public static final String COMMAND_META_UNREAD = "meta-unread";
 
     public static final String VAT_AMOUNT_OPTION = "amount";
     public static final String VAT_BASIS_OPTION = "basis";
@@ -182,6 +183,21 @@ public final class PrimoCommands {
                                         new OptionData(OptionType.STRING, "account", "Select account when scope is Single Account", false)
                                                 .setAutoComplete(true)
                                 )
+                );
+    }
+
+    public static CommandData buildMetaUnreadSlashCommand() {
+        return Commands.slash(COMMAND_META_UNREAD, "Manage Meta unread digest checks")
+                .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MANAGE_SERVER))
+                .addSubcommands(
+                        new SubcommandData("status", "Show current Meta unread settings"),
+                        new SubcommandData("set-enabled", "Enable or disable scheduled checks")
+                                .addOption(OptionType.BOOLEAN, "enabled", "True to enable checks", true),
+                        new SubcommandData("set-channel", "Set digest target channel")
+                                .addOption(OptionType.CHANNEL, "target", "Target channel (text/news/thread/forum)", true),
+                        new SubcommandData("set-interval", "Set check interval in minutes (5-60)")
+                                .addOption(OptionType.INTEGER, "minutes", "Minutes between checks", true),
+                        new SubcommandData("run-now", "Run a Meta unread check immediately")
                 );
     }
 }
