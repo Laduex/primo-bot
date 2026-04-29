@@ -13,6 +13,7 @@ import java.util.Locale;
 @Component
 public class SalesReportMessageBuilder {
     private static final DecimalFormat PHP_DECIMAL_FORMAT = new DecimalFormat("#,##0.00");
+    private static final String DAILY_SECTION_DIVIDER = "--------------------";
 
     public String resolveGreeting(LocalTime localTime) {
         int hour = localTime.getHour();
@@ -62,14 +63,14 @@ public class SalesReportMessageBuilder {
                 continue;
             }
             hasSuccess = true;
-            content.append("- **")
-                    .append(escapeMarkdown(result.accountName()))
-                    .append("**: `")
-                    .append(formatPhp(result.amount()))
-                    .append("`\n");
-
             if (dailyOverview) {
-                appendTopSkuSection(content, result.skuSales());
+                appendDailyOverviewAccountSection(content, result);
+            } else {
+                content.append("- **")
+                        .append(escapeMarkdown(result.accountName()))
+                        .append("**: `")
+                        .append(formatPhp(result.amount()))
+                        .append("`\n");
             }
         }
 
@@ -77,15 +78,25 @@ public class SalesReportMessageBuilder {
             content.append("- (no successful fetches)\n");
         }
 
-        content.append("\n**Grand Total:** `")
-                .append(formatPhp(snapshot.grandTotal()))
-                .append("`\n");
+        if (dailyOverview) {
+            content.append("\n")
+                    .append(DAILY_SECTION_DIVIDER)
+                    .append("\nGrand Total: ")
+                    .append(formatPhp(snapshot.grandTotal()))
+                    .append("\n");
+        } else {
+            content.append("\n**Grand Total:** `")
+                    .append(formatPhp(snapshot.grandTotal()))
+                    .append("`\n");
+        }
 
         List<SalesAccountResult> failures = results.stream()
                 .filter(result -> !result.success())
                 .toList();
         if (!failures.isEmpty()) {
-            if (casual) {
+            if (dailyOverview) {
+                content.append("\nSome accounts failed during this run:\n");
+            } else if (casual) {
                 content.append("\nHeads up: I couldn't fetch some accounts this run. I'll try again on the next schedule:\n");
             } else {
                 content.append("\nWarning: Some accounts failed during this run:\n");
@@ -112,7 +123,20 @@ public class SalesReportMessageBuilder {
         }
     }
 
-    private void appendTopSkuSection(StringBuilder content, List<SkuSalesEntry> skuSales) {
+    private void appendDailyOverviewAccountSection(StringBuilder content, SalesAccountResult result) {
+        content.append(DAILY_SECTION_DIVIDER)
+                .append("\n")
+                .append(escapeMarkdown(result.accountName()).toUpperCase(Locale.ENGLISH))
+                .append("\n")
+                .append("Total: ")
+                .append(formatPhp(result.amount()))
+                .append("\n");
+
+        appendTopSkuSection(content, result.skuSales(), true);
+        content.append("\n");
+    }
+
+    private void appendTopSkuSection(StringBuilder content, List<SkuSalesEntry> skuSales, boolean plainTextStyle) {
         if (skuSales == null || skuSales.isEmpty()) {
             return;
         }
@@ -130,16 +154,29 @@ public class SalesReportMessageBuilder {
             return;
         }
 
-        content.append("  Top 10 Sold SKU (PHP):\n");
+        if (plainTextStyle) {
+            content.append("\nTop 10 Sold SKU (PHP)\n");
+        } else {
+            content.append("  Top 10 Sold SKU (PHP):\n");
+        }
         int rank = 1;
         for (SkuSalesEntry entry : top) {
-            content.append("  ")
-                    .append(rank++)
-                    .append(". ")
-                    .append(escapeMarkdown(safeDisplayName(entry)))
-                    .append(": `")
-                    .append(formatPhp(safeAmount(entry)))
-                    .append("`\n");
+            if (plainTextStyle) {
+                content.append(rank++)
+                        .append(". ")
+                        .append(escapeMarkdown(safeDisplayName(entry)))
+                        .append(" - ")
+                        .append(formatPhp(safeAmount(entry)))
+                        .append("\n");
+            } else {
+                content.append("  ")
+                        .append(rank++)
+                        .append(". ")
+                        .append(escapeMarkdown(safeDisplayName(entry)))
+                        .append(": `")
+                        .append(formatPhp(safeAmount(entry)))
+                        .append("`\n");
+            }
         }
     }
 

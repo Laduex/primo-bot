@@ -38,6 +38,8 @@ class SalesReportSnapshot:
 
 
 class SalesReportMessageBuilder:
+    DAILY_SECTION_DIVIDER = "--------------------"
+
     def resolve_greeting(self, local_time: datetime) -> str:
         hour = local_time.hour
         if 5 <= hour <= 11:
@@ -87,22 +89,30 @@ class SalesReportMessageBuilder:
                 continue
 
             has_success = True
-            content += (
-                f"- **{self._escape_markdown(result.account_name)}**: `"
-                f"{self._format_php(result.amount)}`\n"
-            )
-
             if daily_overview:
-                content += self._append_top_sku_section(result.sku_sales)
+                content += self._append_daily_overview_account_section(result)
+            else:
+                content += (
+                    f"- **{self._escape_markdown(result.account_name)}**: `"
+                    f"{self._format_php(result.amount)}`\n"
+                )
 
         if not has_success:
             content += "- (no successful fetches)\n"
 
-        content += f"\n**Grand Total:** `{self._format_php(snapshot.grand_total)}`\n"
+        if daily_overview:
+            content += (
+                f"\n{self.DAILY_SECTION_DIVIDER}\n"
+                f"Grand Total: {self._format_php(snapshot.grand_total)}\n"
+            )
+        else:
+            content += f"\n**Grand Total:** `{self._format_php(snapshot.grand_total)}`\n"
 
         failures = [result for result in results if not result.success]
         if failures:
-            if casual:
+            if daily_overview:
+                content += "\nSome accounts failed during this run:\n"
+            elif casual:
                 content += (
                     "\nHeads up: I couldn't fetch some accounts this run. "
                     "I'll try again on the next schedule:\n"
@@ -125,7 +135,19 @@ class SalesReportMessageBuilder:
             return f"{content}\n\n{trimmed}"
         return content
 
-    def _append_top_sku_section(self, sku_sales: list[SkuSalesEntry] | None) -> str:
+    def _append_daily_overview_account_section(self, result: SalesAccountResult) -> str:
+        content = (
+            f"{self.DAILY_SECTION_DIVIDER}\n"
+            f"{self._escape_markdown(result.account_name).upper()}\n"
+            f"Total: {self._format_php(result.amount)}\n"
+        )
+        content += self._append_top_sku_section(result.sku_sales, plain_text_style=True)
+        content += "\n"
+        return content
+
+    def _append_top_sku_section(
+        self, sku_sales: list[SkuSalesEntry] | None, plain_text_style: bool = False
+    ) -> str:
         if not sku_sales:
             return ""
 
@@ -142,13 +164,19 @@ class SalesReportMessageBuilder:
         if not top:
             return ""
 
-        lines = ["  Top 10 Sold SKU (PHP):\n"]
+        lines = ["\nTop 10 Sold SKU (PHP)\n"] if plain_text_style else ["  Top 10 Sold SKU (PHP):\n"]
         rank = 1
         for entry in top:
-            lines.append(
-                f"  {rank}. {self._escape_markdown(self._safe_display_name(entry))}: "
-                f"`{self._format_php(self._safe_amount(entry))}`\n"
-            )
+            if plain_text_style:
+                lines.append(
+                    f"{rank}. {self._escape_markdown(self._safe_display_name(entry))} - "
+                    f"{self._format_php(self._safe_amount(entry))}\n"
+                )
+            else:
+                lines.append(
+                    f"  {rank}. {self._escape_markdown(self._safe_display_name(entry))}: "
+                    f"`{self._format_php(self._safe_amount(entry))}`\n"
+                )
             rank += 1
         return "".join(lines)
 
