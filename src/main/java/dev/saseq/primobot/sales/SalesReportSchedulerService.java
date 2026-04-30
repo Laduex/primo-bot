@@ -86,11 +86,13 @@ public class SalesReportSchedulerService {
                                    String slot,
                                    String todayText,
                                    boolean dailyOverview) {
+        String slotKey = slotKey(dailyOverview, slot);
+        config.getLastRunDateBySlot().put(slotKey, todayText);
+        configStore.replaceAndPersist(config);
+
         SalesReportExecutorService.DispatchResult result =
                 executorService.execute(guild, config, null, null, dailyOverview);
         if (result.sent()) {
-            config.getLastRunDateBySlot().put(slotKey(dailyOverview, slot), todayText);
-            configStore.replaceAndPersist(config);
             if (dailyOverview) {
                 LOG.info("Posted scheduled daily sales overview for slot {} to channel {} ({} success, {} failed).",
                         slot,
@@ -104,10 +106,14 @@ public class SalesReportSchedulerService {
                         result.successCount(),
                         result.failureCount());
             }
-        } else if (dailyOverview) {
-            LOG.warn("Scheduled daily sales overview failed for slot {}: {}", slot, result.message());
         } else {
-            LOG.warn("Scheduled sales update failed for slot {}: {}", slot, result.message());
+            config.getLastRunDateBySlot().remove(slotKey);
+            configStore.replaceAndPersist(config);
+            if (dailyOverview) {
+                LOG.warn("Scheduled daily sales overview failed for slot {}: {}", slot, result.message());
+            } else {
+                LOG.warn("Scheduled sales update failed for slot {}: {}", slot, result.message());
+            }
         }
     }
 
