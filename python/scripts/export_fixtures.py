@@ -15,15 +15,15 @@ PYTHON_ROOT = REPO_ROOT / "python"
 if str(PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(PYTHON_ROOT))
 
-from primobot_py.reminders import OrdersReminderMessageBuilder, ReminderThread
-from primobot_py.sales import (
-    SalesAccountResult,
-    SalesPlatform,
-    SalesReportMessageBuilder,
-    SalesReportSnapshot,
-    SkuSalesEntry,
-)
-from primobot_py.vat import VatBasis, VatCalculator
+from primobot_py.reminders import OrdersReminderMessageBuilder, ReminderThread  # noqa: E402
+from primobot_py import sales as sales_mod  # noqa: E402
+from primobot_py.vat import VatBasis, VatCalculator  # noqa: E402
+
+SalesAccountResult = sales_mod.SalesAccountResult
+SalesPlatform = sales_mod.SalesPlatform
+SalesReportMessageBuilder = sales_mod.SalesReportMessageBuilder
+SalesReportSnapshot = sales_mod.SalesReportSnapshot
+SkuSalesEntry = sales_mod.SkuSalesEntry
 
 
 def write_fixture(relative_path: str, payload: dict) -> None:

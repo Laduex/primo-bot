@@ -1,0 +1,10 @@
+{
+  "enabled" : true,
+  "timezone" : "Asia/Manila",
+  "hour" : 8,
+  "minute" : 0,
+  "routes" : [ ],
+  "lastRunDateByRoute" : { },
+  "messageTone" : "casual",
+  "signature" : "Thanks, Primo"
+}

@@ -6,6 +6,6 @@
     "tone": "formal"
   },
   "output": {
-    "message": "Good Evening, team. Here is today's daily sales overview.\n\n- **UTAK Main**: `PHP 10,450.00`\n  Top 10 Sold SKU (PHP):\n  1. SKU 01: `PHP 1,000.00`\n  2. SKU 02: `PHP 990.00`\n  3. SKU 03: `PHP 980.00`\n  4. SKU 04: `PHP 970.00`\n  5. SKU 05: `PHP 960.00`\n  6. SKU 06: `PHP 950.00`\n  7. SKU 07: `PHP 940.00`\n  8. SKU 08: `PHP 930.00`\n  9. SKU 09: `PHP 920.00`\n  10. SKU 10: `PHP 910.00`\n\n**Grand Total:** `PHP 10,450.00`\n\n\nThanks, Primo"
+    "message": "Good Evening, team. Here is today's daily sales overview.\n\n--------------------\nUTAK MAIN\nTotal: PHP 10,450.00\n\nTop 10 Sold SKU (PHP)\n1. SKU 01 - PHP 1,000.00\n2. SKU 02 - PHP 990.00\n3. SKU 03 - PHP 980.00\n4. SKU 04 - PHP 970.00\n5. SKU 05 - PHP 960.00\n6. SKU 06 - PHP 950.00\n7. SKU 07 - PHP 940.00\n8. SKU 08 - PHP 930.00\n9. SKU 09 - PHP 920.00\n10. SKU 10 - PHP 910.00\n\n\n--------------------\nGrand Total: PHP 10,450.00\n\n\nThanks, Primo"
   }
 }
