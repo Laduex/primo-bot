@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 
+from primobot_py.claims import CrossProcessClaimStore
 from primobot_py.meta_unread import (
     MetaUnreadConfig,
     MetaUnreadConfigStore,
@@ -115,6 +116,7 @@ def test_meta_unread_scheduler_due_logic() -> None:
         config_store=_StubStore(),
         executor_service=_StubExecutor(),
         default_guild_id="",
+        claim_store=CrossProcessClaimStore(),
     )
 
     assert scheduler.is_due(MetaUnreadConfig(lastRunAtEpochMs=0, intervalMinutes=15), 10_000) is True

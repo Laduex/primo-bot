@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 import discord
 from discord import app_commands
 
+from .claims import CrossProcessClaimStore
 from .utils import chunk_message, dedupe_keep_order, format_php, is_snowflake, is_valid_timezone, normalize_hhmm, resolve_zoneinfo
 
 LOG = logging.getLogger(__name__)
@@ -31,6 +32,8 @@ FORUM_POST_TITLE_MAX = 100
 DISCORD_AUTOCOMPLETE_MAX_CHOICES = 25
 DIRECT_RUN_NOW_RE = re.compile(r"(?i)^sales\s+run\s+now(?:\s+(.*))?$")
 SNOWFLAKE_RE = re.compile(r"\d+")
+SCHEDULE_CLAIM_NAMESPACE = "sales-schedule"
+DIRECT_RUN_NOW_CLAIM_NAMESPACE = "sales-direct-run-now-message"
 
 
 class SalesPlatform(str, Enum):
@@ -1423,11 +1426,13 @@ class SalesReportSchedulerService:
         config_store: SalesReportConfigStore,
         executor_service: SalesReportExecutorService,
         default_guild_id: str,
+        claim_store: CrossProcessClaimStore,
     ) -> None:
         self.bot = bot
         self.config_store = config_store
         self.executor_service = executor_service
         self.default_guild_id = default_guild_id.strip()
+        self.claim_store = claim_store
 
     async def run_sales_tick(self) -> None:
         config = await self.config_store.get_snapshot()
@@ -1483,6 +1488,13 @@ class SalesReportSchedulerService:
         daily_overview: bool,
     ) -> None:
         slot_key = self._slot_key(daily_overview, slot)
+        claim_key = f"{today_text}|{slot_key}"
+        if not self.claim_store.try_claim(
+            SCHEDULE_CLAIM_NAMESPACE,
+            claim_key,
+            timedelta(days=2),
+        ):
+            return
         config.lastRunDateBySlot[slot_key] = today_text
         await self.config_store.replace_and_persist(config)
 
@@ -1508,6 +1520,7 @@ class SalesReportSchedulerService:
 
         config.lastRunDateBySlot.pop(slot_key, None)
         await self.config_store.replace_and_persist(config)
+        self.claim_store.release(SCHEDULE_CLAIM_NAMESPACE, claim_key)
         if daily_overview:
             LOG.warning("Scheduled daily sales overview failed for slot %s: %s", slot, result.message)
         else:
@@ -1539,12 +1552,14 @@ class SalesCommandService:
         executor_service: SalesReportExecutorService,
         scheduler_service: SalesReportSchedulerService,
         default_guild_id: str,
+        claim_store: CrossProcessClaimStore,
     ) -> None:
         self.bot = bot
         self.config_store = config_store
         self.executor_service = executor_service
         self.scheduler_service = scheduler_service
         self.default_guild_id = default_guild_id.strip()
+        self.claim_store = claim_store
 
     async def status_text(self) -> str:
         config = await self.config_store.get_snapshot()
@@ -1748,6 +1763,12 @@ class SalesCommandService:
             if not selected_account_id
             else f"account `{selected_account_id}`"
         )
+        if not self.claim_store.try_claim(
+            DIRECT_RUN_NOW_CLAIM_NAMESPACE,
+            str(message.id),
+            timedelta(hours=1),
+        ):
+            return True
         await message.channel.send(f"Running sales report now for {scope_label}...")
         result = await self.executor_service.execute_direct(
             await self.config_store.get_snapshot(),

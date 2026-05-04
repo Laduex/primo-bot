@@ -10,6 +10,7 @@ from typing import Any
 
 import discord
 
+from .claims import CrossProcessClaimStore
 from .utils import chunk_message, is_snowflake, is_valid_timezone, normalize_hhmm, resolve_zoneinfo
 
 LOG = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ FALLBACK_DEFAULT_ROUTES = (
     "1495586749802610708:1494175305743601755:1494215727857532980;"
     "1495586880983531680:1494175215071006730:1494215689165213818"
 )
+SCHEDULE_CLAIM_NAMESPACE = "orders-reminder-schedule"
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,11 +290,13 @@ class OrdersReminderService:
         config_store: OrdersReminderConfigStore,
         message_builder: OrdersReminderMessageBuilder,
         default_guild_id: str,
+        claim_store: CrossProcessClaimStore,
     ) -> None:
         self.bot = bot
         self.config_store = config_store
         self.message_builder = message_builder
         self.default_guild_id = default_guild_id.strip()
+        self.claim_store = claim_store
 
     async def status_text(self) -> str:
         config = await self.config_store.get_snapshot()
@@ -378,14 +382,23 @@ class OrdersReminderService:
         for route in config.routes:
             if today_text == config.lastRunDateByRoute.get(route.forumId):
                 continue
+            claim_key = f"{today_text}|{route.forumId}"
+            if not self.claim_store.try_claim(
+                SCHEDULE_CLAIM_NAMESPACE,
+                claim_key,
+                timedelta(days=2),
+            ):
+                continue
 
             forum = guild.get_channel(int(route.forumId))
             if not isinstance(forum, discord.ForumChannel):
+                self.claim_store.release(SCHEDULE_CLAIM_NAMESPACE, claim_key)
                 LOG.warning("Orders reminder route skipped: forum %s not found.", route.forumId)
                 continue
 
             target = guild.get_channel(int(route.targetTextChannelId))
             if not isinstance(target, discord.TextChannel):
+                self.claim_store.release(SCHEDULE_CLAIM_NAMESPACE, claim_key)
                 LOG.warning(
                     "Orders reminder route skipped: target channel %s not found.",
                     route.targetTextChannelId,
@@ -394,6 +407,7 @@ class OrdersReminderService:
 
             role = guild.get_role(int(route.mentionRoleId))
             if role is None:
+                self.claim_store.release(SCHEDULE_CLAIM_NAMESPACE, claim_key)
                 LOG.warning("Orders reminder route skipped: role %s not found.", route.mentionRoleId)
                 continue
 
@@ -402,6 +416,7 @@ class OrdersReminderService:
                 key=lambda thread: thread.name.lower(),
             )
             if not open_threads:
+                self.claim_store.release(SCHEDULE_CLAIM_NAMESPACE, claim_key)
                 continue
 
             content = self.message_builder.build_reminder_message(
@@ -420,6 +435,7 @@ class OrdersReminderService:
                 for chunk in chunk_message(content, DISCORD_MESSAGE_MAX_LENGTH):
                     await target.send(chunk)
             except discord.HTTPException as ex:
+                self.claim_store.release(SCHEDULE_CLAIM_NAMESPACE, claim_key)
                 LOG.warning("Failed sending orders reminder for forum %s: %s", forum.id, ex)
                 continue
 

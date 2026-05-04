@@ -15,9 +15,11 @@ from urllib.request import Request, urlopen
 
 import discord
 
+from .claims import CrossProcessClaimStore
 from .utils import chunk_message, is_snowflake
 
 LOG = logging.getLogger(__name__)
+SCHEDULE_CLAIM_NAMESPACE = "meta-unread-schedule"
 
 DISCORD_MESSAGE_MAX_LENGTH = 2000
 FORUM_POST_TITLE_MAX_LENGTH = 100
@@ -716,11 +718,13 @@ class MetaUnreadSchedulerService:
         config_store: MetaUnreadConfigStore,
         executor_service: MetaUnreadExecutorService,
         default_guild_id: str,
+        claim_store: CrossProcessClaimStore,
     ) -> None:
         self.bot = bot
         self.config_store = config_store
         self.executor_service = executor_service
         self.default_guild_id = default_guild_id.strip()
+        self.claim_store = claim_store
 
     async def run_meta_unread_tick(self) -> None:
         config = await self.config_store.get_snapshot()
@@ -728,6 +732,15 @@ class MetaUnreadSchedulerService:
             return
         now = int(datetime.now().timestamp() * 1000)
         if not self.is_due(config, now):
+            return
+        interval_minutes = max(5, config.intervalMinutes)
+        window_bucket = now // (interval_minutes * 60_000)
+        claim_key = f"{config.targetChannelId or 'default'}|{window_bucket}"
+        if not self.claim_store.try_claim(
+            SCHEDULE_CLAIM_NAMESPACE,
+            claim_key,
+            timedelta(minutes=interval_minutes * 2),
+        ):
             return
         guild = self.resolve_guild()
         result = await self.executor_service.execute(guild, config)

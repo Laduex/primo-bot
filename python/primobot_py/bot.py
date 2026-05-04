@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
+from datetime import timedelta
 import logging
 import uuid
 
@@ -9,6 +10,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from .claims import CrossProcessClaimStore
 from .meta_unread import (
     MetaGraphApiClient,
     MetaUnreadCollectorService,
@@ -36,6 +38,8 @@ from .settings import Settings
 from .utils import is_valid_timezone
 
 LOG = logging.getLogger(__name__)
+INTERACTION_CLAIM_NAMESPACE = "slash-interaction"
+INTERACTION_CLAIM_TTL = timedelta(minutes=15)
 
 
 class PrimoBot(commands.Bot):
@@ -47,7 +51,11 @@ class PrimoBot(commands.Bot):
         intents.members = True
         super().__init__(command_prefix="!", intents=intents)
         self.settings = settings
-        self.order_handler = OrderHandler(lambda: self.user.id if self.user else None)
+        self.claim_store = CrossProcessClaimStore()
+        self.order_handler = OrderHandler(
+            lambda: self.user.id if self.user else None,
+            self.claim_store,
+        )
         self.orders_reminder_store = OrdersReminderConfigStore(
             settings.order_reminder_config_path,
             settings.order_reminder_default_enabled,
@@ -60,6 +68,7 @@ class PrimoBot(commands.Bot):
             self.orders_reminder_store,
             OrdersReminderMessageBuilder(),
             settings.discord_guild_id,
+            self.claim_store,
         )
         self.sales_report_store = SalesReportConfigStore(
             settings.sales_report_config_path,
@@ -81,6 +90,7 @@ class PrimoBot(commands.Bot):
             self.sales_report_store,
             sales_executor,
             settings.discord_guild_id,
+            self.claim_store,
         )
         self.sales_command_service = SalesCommandService(
             self,
@@ -88,6 +98,7 @@ class PrimoBot(commands.Bot):
             sales_executor,
             self.sales_scheduler_service,
             settings.discord_guild_id,
+            self.claim_store,
         )
         self.meta_unread_store = MetaUnreadConfigStore(
             settings.meta_unread_config_path,
@@ -111,6 +122,7 @@ class PrimoBot(commands.Bot):
             self.meta_unread_store,
             meta_unread_executor,
             settings.discord_guild_id,
+            self.claim_store,
         )
         self.forum_auto_mention_targets = self.order_handler.parse_forum_auto_mention_targets(
             settings.forum_auto_mention_targets
@@ -238,12 +250,16 @@ class PrimoBot(commands.Bot):
         async def order(
             interaction: discord.Interaction[discord.Client], forum: str, customer: str
         ) -> None:
+            if not self._claim_interaction_once(interaction):
+                return
             await self.order_handler.create_order(interaction, forum, customer)
 
         @self.tree.command(
             name="completed", description="Mark this forum post as completed and close it"
         )
         async def completed(interaction: discord.Interaction[discord.Client]) -> None:
+            if not self._claim_interaction_once(interaction):
+                return
             await self.order_handler.complete_order(interaction)
 
         @self.tree.command(
@@ -254,6 +270,8 @@ class PrimoBot(commands.Bot):
         async def order_remind(
             interaction: discord.Interaction[discord.Client], forum: discord.ForumChannel
         ) -> None:
+            if not self._claim_interaction_once(interaction):
+                return
             guild = interaction.guild
             member = interaction.user if isinstance(interaction.user, discord.Member) else None
             if guild is None or member is None:
@@ -615,6 +633,8 @@ class PrimoBot(commands.Bot):
             scope: str | None = None,
             account: str | None = None,
         ) -> None:
+            if not self._claim_interaction_once(interaction):
+                return
             if interaction.guild is None:
                 await interaction.response.send_message(
                     "This command can only be used inside a Discord server. In DMs, use `/sales run-now` or `sales run now`.",
@@ -773,6 +793,8 @@ class PrimoBot(commands.Bot):
             scope: str | None = None,
             account: str | None = None,
         ) -> None:
+            if not self._claim_interaction_once(interaction):
+                return
             if interaction.guild is None:
                 if not await self.sales_command_service._has_manage_server_for_direct_run_now_user(
                     interaction.user
@@ -870,6 +892,16 @@ class PrimoBot(commands.Bot):
                 return "No matching account was found. Run `/sales-report list-accounts` to check valid account IDs."
             return f"No account found for id `{result.account_id}`. Run `/sales-report list-accounts` to check valid account IDs."
         return "Failed to send sales report: " + (result.message or "Unknown error")
+
+    def _claim_interaction_once(self, interaction: discord.Interaction[discord.Client]) -> bool:
+        claimed = self.claim_store.try_claim(
+            INTERACTION_CLAIM_NAMESPACE,
+            str(interaction.id),
+            INTERACTION_CLAIM_TTL,
+        )
+        if not claimed:
+            LOG.warning("Ignoring duplicate slash interaction %s", interaction.id)
+        return claimed
 
     async def _require_manage_server(
         self, interaction: discord.Interaction[discord.Client], label: str

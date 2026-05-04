@@ -8,6 +8,7 @@ import re
 import discord
 from discord import app_commands
 
+from .claims import CrossProcessClaimStore
 from .utils import normalize_snowflake
 
 LOG = logging.getLogger(__name__)
@@ -20,6 +21,8 @@ DISCORD_AUTOCOMPLETE_MAX_CHOICES = 25
 ORDER_REQUEST_TTL = timedelta(minutes=10)
 HISTORY_LOOKBACK_COUNT = 15
 SNOWFLAKE_RE = re.compile(r"\d+")
+ORDER_MESSAGE_CLAIM_NAMESPACE = "order-message"
+FORUM_AUTO_MENTION_CLAIM_NAMESPACE = "forum-auto-mention"
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,11 +35,16 @@ class PendingOrderContext:
 
 
 class OrderHandler:
-    def __init__(self, bot_user_id: callable[[], int | None]) -> None:
+    def __init__(
+        self,
+        bot_user_id: callable[[], int | None],
+        claim_store: CrossProcessClaimStore,
+    ) -> None:
         self._pending: dict[str, PendingOrderContext] = {}
         self._completed_interactions: dict[int, datetime] = {}
         self._processed_thread_ids: set[int] = set()
         self._bot_user_id = bot_user_id
+        self._claim_store = claim_store
 
     async def create_order(
         self, interaction: discord.Interaction[discord.Client], forum_value: str, customer_name: str
@@ -158,25 +166,35 @@ class OrderHandler:
         pending = self._pending.get(key)
         if pending is None:
             return
+        if not self._claim_store.try_claim(
+            ORDER_MESSAGE_CLAIM_NAMESPACE,
+            str(message.id),
+            ORDER_REQUEST_TTL,
+        ):
+            return
 
         if self._is_expired(pending):
             self._pending.pop(key, None)
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             await message.reply("Your pending `/order` request expired. Run `/order` again.")
             return
 
         forum = message.guild.get_channel(pending.forum_id)
         if not isinstance(forum, discord.ForumChannel):
             self._pending.pop(key, None)
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             await message.reply("The selected forum no longer exists. Run `/order` again.")
             return
         if not self._is_orders_category_forum(forum):
             self._pending.pop(key, None)
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             await message.reply(
                 f"The selected forum is no longer under `{ORDERS_CATEGORY_NAME}`. Run `/order` again."
             )
             return
         if not self._can_member_create_forum_post(message.author, forum):
             self._pending.pop(key, None)
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             await message.reply(
                 f"You do not have permission to create posts in {forum.mention}."
             )
@@ -184,6 +202,7 @@ class OrderHandler:
 
         order_message = self._build_order_message(message)
         if not order_message:
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             await message.reply(
                 "Order message cannot be empty. Send text or attachment, or run `/order` again."
             )
@@ -191,6 +210,7 @@ class OrderHandler:
 
         post_body = f"Posted by {message.author.mention}\n{order_message}"
         if len(post_body) > DISCORD_MESSAGE_MAX_LENGTH:
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             await message.reply(
                 "That message is too long after `Posted by @user` (max 2000 chars). "
                 "Send a shorter message."
@@ -201,6 +221,7 @@ class OrderHandler:
         post_title = f"{title_prefix} | {pending.customer_name}"
         if len(post_title) > ORDER_FORUM_TITLE_MAX_LENGTH:
             self._pending.pop(key, None)
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             allowed = max(1, ORDER_FORUM_TITLE_MAX_LENGTH - (len(title_prefix) + 3))
             await message.reply(
                 "Customer name is too long for today's title format. "
@@ -213,6 +234,7 @@ class OrderHandler:
             created = await forum.create_thread(name=post_title, content=post_body)
         except discord.HTTPException as ex:
             self._pending.setdefault(key, pending)
+            self._claim_store.release(ORDER_MESSAGE_CLAIM_NAMESPACE, str(message.id))
             await message.reply(f"Failed to create forum post: {ex}")
             return
 
@@ -255,6 +277,12 @@ class OrderHandler:
         if bot_user_id is not None and thread.owner_id == bot_user_id:
             return
         if thread.id in self._processed_thread_ids:
+            return
+        if not self._claim_store.try_claim(
+            FORUM_AUTO_MENTION_CLAIM_NAMESPACE,
+            str(thread.id),
+            timedelta(days=2),
+        ):
             return
         self._processed_thread_ids.add(thread.id)
 
@@ -299,6 +327,7 @@ class OrderHandler:
             await thread.send(content)
         except discord.HTTPException as ex:
             self._processed_thread_ids.discard(thread.id)
+            self._claim_store.release(FORUM_AUTO_MENTION_CLAIM_NAMESPACE, str(thread.id))
             LOG.warning("Failed to post forum auto-mention in thread %s: %s", thread.id, ex)
 
     @staticmethod
