@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from enum import Enum
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -34,6 +35,8 @@ DIRECT_RUN_NOW_RE = re.compile(r"(?i)^sales\s+run\s+now(?:\s+(.*))?$")
 SNOWFLAKE_RE = re.compile(r"\d+")
 SCHEDULE_CLAIM_NAMESPACE = "sales-schedule"
 DIRECT_RUN_NOW_CLAIM_NAMESPACE = "sales-direct-run-now-message"
+DISPATCH_DEDUPE_CLAIM_NAMESPACE = "sales-dispatch"
+DISPATCH_DEDUPE_TTL = timedelta(minutes=3)
 
 
 class SalesPlatform(str, Enum):
@@ -1271,9 +1274,11 @@ class SalesReportExecutorService:
         self,
         aggregator_service: SalesAggregatorService,
         message_builder: SalesReportMessageBuilder,
+        claim_store: CrossProcessClaimStore,
     ) -> None:
         self.aggregator_service = aggregator_service
         self.message_builder = message_builder
+        self.claim_store = claim_store
 
     async def execute(
         self,
@@ -1282,6 +1287,7 @@ class SalesReportExecutorService:
         override_target_channel_id: str,
         selected_account_id: str,
         daily_overview: bool,
+        suppress_recent_duplicates: bool = False,
     ) -> DispatchResult:
         if guild is None:
             return DispatchResult("GUILD_NOT_FOUND", "", selected_account_id, "No guild available", 0, 0)
@@ -1296,8 +1302,38 @@ class SalesReportExecutorService:
 
         try:
             chunks = chunk_message(prepared.content, DISCORD_MESSAGE_MAX_LENGTH)
+            dedupe_key = ""
+            if suppress_recent_duplicates:
+                dedupe_key = self._build_dispatch_dedupe_key(
+                    target_id,
+                    selected_account_id,
+                    daily_overview,
+                    chunks,
+                )
+                if not self.claim_store.try_claim(
+                    DISPATCH_DEDUPE_CLAIM_NAMESPACE,
+                    dedupe_key,
+                    DISPATCH_DEDUPE_TTL,
+                ):
+                    return DispatchResult(
+                        "DUPLICATE_SUPPRESSED",
+                        target_id,
+                        selected_account_id,
+                        "Duplicate scheduled dispatch suppressed",
+                        prepared.success_count,
+                        prepared.failure_count,
+                    )
             channel = guild.get_channel(int(target_id))
             if isinstance(channel, discord.TextChannel):
+                if suppress_recent_duplicates and await self._matches_recent_bot_dispatch(channel, chunks):
+                    return DispatchResult(
+                        "DUPLICATE_SUPPRESSED",
+                        target_id,
+                        selected_account_id,
+                        "Duplicate scheduled dispatch suppressed",
+                        prepared.success_count,
+                        prepared.failure_count,
+                    )
                 for chunk in chunks:
                     await channel.send(chunk)
             elif isinstance(channel, discord.ForumChannel):
@@ -1318,6 +1354,8 @@ class SalesReportExecutorService:
                 prepared.failure_count,
             )
         except discord.HTTPException as ex:
+            if dedupe_key:
+                self.claim_store.release(DISPATCH_DEDUPE_CLAIM_NAMESPACE, dedupe_key)
             return DispatchResult("SEND_FAILED", target_id, selected_account_id, str(ex), 0, 0)
 
     async def execute_direct(
@@ -1418,6 +1456,47 @@ class SalesReportExecutorService:
         title = f"{report_type} | {scope} | {timestamp}"
         return title[:FORUM_POST_TITLE_MAX]
 
+    @staticmethod
+    def _build_dispatch_dedupe_key(
+        target_id: str,
+        selected_account_id: str,
+        daily_overview: bool,
+        chunks: Sequence[str],
+    ) -> str:
+        payload = "\n<chunk>\n".join(chunks)
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        report_type = "overview" if daily_overview else "update"
+        account_scope = selected_account_id.strip() if selected_account_id.strip() else "all"
+        return f"{target_id}|{report_type}|{account_scope}|{digest}"
+
+    async def _matches_recent_bot_dispatch(
+        self,
+        channel: discord.TextChannel,
+        chunks: Sequence[str],
+    ) -> bool:
+        bot_member = channel.guild.me
+        if bot_member is None:
+            return False
+
+        recent_messages = [
+            message
+            async for message in channel.history(limit=max(len(chunks), 1))
+        ]
+        if len(recent_messages) < len(chunks):
+            return False
+
+        now = datetime.now(UTC)
+        expected_contents = list(reversed(list(chunks)))
+        for index, expected in enumerate(expected_contents):
+            message = recent_messages[index]
+            if message.author.id != bot_member.id:
+                return False
+            if (now - message.created_at.astimezone(UTC)) > DISPATCH_DEDUPE_TTL:
+                return False
+            if message.content != expected:
+                return False
+        return True
+
 
 class SalesReportSchedulerService:
     def __init__(
@@ -1498,11 +1577,19 @@ class SalesReportSchedulerService:
         config.lastRunDateBySlot[slot_key] = today_text
         await self.config_store.replace_and_persist(config)
 
-        result = await self.executor_service.execute(guild, config, "", "", daily_overview)
-        if result.status == "SENT":
+        result = await self.executor_service.execute(
+            guild,
+            config,
+            "",
+            "",
+            daily_overview,
+            suppress_recent_duplicates=True,
+        )
+        if result.status in {"SENT", "DUPLICATE_SUPPRESSED"}:
             if daily_overview:
                 LOG.info(
-                    "Posted scheduled daily sales overview for slot %s to channel %s (%s success, %s failed).",
+                    "%s scheduled daily sales overview for slot %s to channel %s (%s success, %s failed).",
+                    "Suppressed duplicate" if result.status == "DUPLICATE_SUPPRESSED" else "Posted",
                     slot,
                     result.target_channel_id,
                     result.success_count,
@@ -1510,7 +1597,8 @@ class SalesReportSchedulerService:
                 )
             else:
                 LOG.info(
-                    "Posted scheduled sales update for slot %s to channel %s (%s success, %s failed).",
+                    "%s scheduled sales update for slot %s to channel %s (%s success, %s failed).",
+                    "Suppressed duplicate" if result.status == "DUPLICATE_SUPPRESSED" else "Posted",
                     slot,
                     result.target_channel_id,
                     result.success_count,

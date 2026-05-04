@@ -80,6 +80,7 @@ class PrimoBot(commands.Bot):
         sales_executor = SalesReportExecutorService(
             SalesAggregatorService([UtakBrowserSalesProvider(), LoyverseApiSalesProvider()]),
             SalesReportMessageBuilder(),
+            self.claim_store,
         )
         self.sales_scheduler_service = SalesReportSchedulerService(
             self,

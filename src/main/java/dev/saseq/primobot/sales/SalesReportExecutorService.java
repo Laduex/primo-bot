@@ -1,7 +1,9 @@
 package dev.saseq.primobot.sales;
 
 import dev.saseq.primobot.util.DiscordMessageUtils;
+import dev.saseq.primobot.util.CrossProcessClaimStore;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.ForumChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
@@ -9,9 +11,14 @@ import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.ZonedDateTime;
+import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.time.ZoneId;
 
@@ -20,21 +27,27 @@ public class SalesReportExecutorService {
     private static final int DISCORD_MESSAGE_MAX_LENGTH = 2000;
     private static final int FORUM_POST_TITLE_MAX = 100;
     private static final DateTimeFormatter FORUM_TITLE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final String DISPATCH_DEDUPE_NAMESPACE = "sales-dispatch";
+    private static final Duration DISPATCH_DEDUPE_TTL = Duration.ofMinutes(3);
 
     private final SalesAggregatorService aggregatorService;
     private final SalesReportMessageBuilder messageBuilder;
+    private final CrossProcessClaimStore claimStore;
 
     public SalesReportExecutorService(SalesAggregatorService aggregatorService,
-                                      SalesReportMessageBuilder messageBuilder) {
+                                      SalesReportMessageBuilder messageBuilder,
+                                      CrossProcessClaimStore claimStore) {
         this.aggregatorService = aggregatorService;
         this.messageBuilder = messageBuilder;
+        this.claimStore = claimStore;
     }
 
     public DispatchResult execute(Guild guild,
                                   SalesReportConfig config,
                                   String overrideTargetChannelId,
                                   String selectedAccountId,
-                                  boolean dailyOverview) {
+                                  boolean dailyOverview,
+                                  boolean suppressRecentDuplicates) {
         if (guild == null) {
             return new DispatchResult(DispatchStatus.GUILD_NOT_FOUND, "", "", "No guild available", 0, 0);
         }
@@ -51,8 +64,28 @@ public class SalesReportExecutorService {
 
         try {
             List<String> chunks = DiscordMessageUtils.chunkMessage(prepared.content(), DISCORD_MESSAGE_MAX_LENGTH);
+            String dedupeKey = "";
+            if (suppressRecentDuplicates) {
+                dedupeKey = buildDispatchDedupeKey(targetId, selectedAccountId, dailyOverview, chunks);
+                if (!claimStore.tryClaim(DISPATCH_DEDUPE_NAMESPACE, dedupeKey, DISPATCH_DEDUPE_TTL)) {
+                    return new DispatchResult(DispatchStatus.DUPLICATE_SUPPRESSED,
+                            targetId,
+                            selectedAccountId,
+                            "Duplicate scheduled dispatch suppressed",
+                            prepared.successCount(),
+                            prepared.failureCount());
+                }
+            }
             TextChannel textTarget = guild.getTextChannelById(targetId);
             if (textTarget != null) {
+                if (suppressRecentDuplicates && matchesRecentBotDispatch(textTarget, chunks, guild)) {
+                    return new DispatchResult(DispatchStatus.DUPLICATE_SUPPRESSED,
+                            targetId,
+                            selectedAccountId,
+                            "Duplicate scheduled dispatch suppressed",
+                            prepared.successCount(),
+                            prepared.failureCount());
+                }
                 for (String chunk : chunks) {
                     textTarget.sendMessage(chunk).complete();
                 }
@@ -78,6 +111,9 @@ public class SalesReportExecutorService {
                     prepared.successCount(),
                     prepared.failureCount());
         } catch (Exception ex) {
+            if (suppressRecentDuplicates) {
+                claimStore.release(DISPATCH_DEDUPE_NAMESPACE, buildDispatchDedupeKey(targetId, selectedAccountId, dailyOverview, DiscordMessageUtils.chunkMessage(prepared.content(), DISCORD_MESSAGE_MAX_LENGTH)));
+            }
             return new DispatchResult(DispatchStatus.SEND_FAILED, targetId, selectedAccountId, ex.getMessage(), 0, 0);
         }
     }
@@ -191,6 +227,50 @@ public class SalesReportExecutorService {
         return filtered;
     }
 
+    private String buildDispatchDedupeKey(String targetId,
+                                          String selectedAccountId,
+                                          boolean dailyOverview,
+                                          List<String> chunks) {
+        String payload = String.join("\n<chunk>\n", chunks);
+        String digest = sha256(payload);
+        String reportType = dailyOverview ? "overview" : "update";
+        String accountScope = selectedAccountId == null || selectedAccountId.isBlank() ? "all" : selectedAccountId.trim();
+        return targetId + "|" + reportType + "|" + accountScope + "|" + digest;
+    }
+
+    private boolean matchesRecentBotDispatch(TextChannel channel, List<String> chunks, Guild guild) {
+        List<Message> recent = channel.getHistory().retrievePast(Math.max(chunks.size(), 1)).complete();
+        if (recent.size() < chunks.size()) {
+            return false;
+        }
+
+        long botUserId = guild.getSelfMember().getIdLong();
+        OffsetDateTime cutoff = OffsetDateTime.now().minus(DISPATCH_DEDUPE_TTL);
+        for (int index = 0; index < chunks.size(); index++) {
+            Message message = recent.get(index);
+            String expected = chunks.get(chunks.size() - 1 - index);
+            if (message.getAuthor().getIdLong() != botUserId) {
+                return false;
+            }
+            if (message.getTimeCreated().isBefore(cutoff)) {
+                return false;
+            }
+            if (!expected.equals(message.getContentRaw())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to hash dispatch payload", ex);
+        }
+    }
+
     private ZoneId resolveZoneId(String timezone) {
         try {
             return ZoneId.of(timezone);
@@ -216,6 +296,7 @@ public class SalesReportExecutorService {
 
     public enum DispatchStatus {
         SENT,
+        DUPLICATE_SUPPRESSED,
         GUILD_NOT_FOUND,
         TARGET_NOT_CONFIGURED,
         TARGET_NOT_FOUND,
@@ -230,7 +311,7 @@ public class SalesReportExecutorService {
                                  int successCount,
                                  int failureCount) {
         public boolean sent() {
-            return status == DispatchStatus.SENT;
+            return status == DispatchStatus.SENT || status == DispatchStatus.DUPLICATE_SUPPRESSED;
         }
     }
 

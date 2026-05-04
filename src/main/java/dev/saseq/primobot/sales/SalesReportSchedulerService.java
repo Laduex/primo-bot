@@ -89,7 +89,7 @@ public class SalesReportSchedulerService {
                                                             String overrideTargetChannelId,
                                                             String selectedAccountId) {
         SalesReportConfig config = configStore.getSnapshot();
-        return executorService.execute(guild, config, overrideTargetChannelId, selectedAccountId, false);
+        return executorService.execute(guild, config, overrideTargetChannelId, selectedAccountId, false, false);
     }
 
     private void dispatchScheduled(Guild guild,
@@ -103,16 +103,18 @@ public class SalesReportSchedulerService {
         configStore.replaceAndPersist(config);
 
         SalesReportExecutorService.DispatchResult result =
-                executorService.execute(guild, config, null, null, dailyOverview);
+                executorService.execute(guild, config, null, null, dailyOverview, true);
         if (result.sent()) {
             if (dailyOverview) {
-                LOG.info("Posted scheduled daily sales overview for slot {} to channel {} ({} success, {} failed).",
+                LOG.info("{} scheduled daily sales overview for slot {} to channel {} ({} success, {} failed).",
+                        result.status() == SalesReportExecutorService.DispatchStatus.DUPLICATE_SUPPRESSED ? "Suppressed duplicate" : "Posted",
                         slot,
                         result.targetChannelId(),
                         result.successCount(),
                         result.failureCount());
             } else {
-                LOG.info("Posted scheduled sales update for slot {} to channel {} ({} success, {} failed).",
+                LOG.info("{} scheduled sales update for slot {} to channel {} ({} success, {} failed).",
+                        result.status() == SalesReportExecutorService.DispatchStatus.DUPLICATE_SUPPRESSED ? "Suppressed duplicate" : "Posted",
                         slot,
                         result.targetChannelId(),
                         result.successCount(),
