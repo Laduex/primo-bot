@@ -37,12 +37,19 @@ build/
 ### Mac OS ###
 .DS_Store
 
+### Python ###
+__pycache__/
+*.pyc
+.venv/
+
 ## Claude
 .claude
 AGENTS.md
 
 # Local runtime secrets
 .env
+data/*.json
+!data/.gitkeep
 
 # Local docs/spec drafts (not part of release commits)
 ai-docs/

@@ -1,0 +1,35 @@
+[project]
+name = "primobot-py"
+version = "0.1.0"
+description = "Python refactor scaffold for primo-bot"
+requires-python = ">=3.11"
+dependencies = [
+  "discord.py>=2.5.0,<3.0.0",
+  "fastapi>=0.115.0,<1.0.0",
+  "uvicorn>=0.34.0,<1.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0,<9.0.0",
+  "ruff>=0.11.0,<1.0.0",
+  "mypy>=1.15.0,<2.0.0"
+]
+
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["primobot_py*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

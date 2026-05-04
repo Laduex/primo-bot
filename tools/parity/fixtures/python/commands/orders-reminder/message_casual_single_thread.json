@@ -1,0 +1,19 @@
+{
+  "input": {
+    "forumName": "roastery-orders",
+    "greeting": "Good Morning",
+    "guildId": "1478671501338214410",
+    "mentionRoleId": "1494215754084651089",
+    "openThreads": [
+      {
+        "name": "April 20 | Monday | Mechanika Order",
+        "thread_id": "1495615105767837808"
+      }
+    ],
+    "signature": "Thanks, Primo",
+    "tone": "casual"
+  },
+  "output": {
+    "message": "<@&1494215754084651089> Good Morning, team! Here are the orders still open in roastery-orders:\n\n- [April 20 | Monday | Mechanika Order](https://discord.com/channels/1478671501338214410/1495615105767837808)\n\nIf any of these are already done, please run `/completed` inside the order post so I can keep this list updated.\n\nThanks, Primo"
+  }
+}

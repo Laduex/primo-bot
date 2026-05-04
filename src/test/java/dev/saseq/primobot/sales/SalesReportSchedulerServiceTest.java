@@ -41,13 +41,16 @@ class SalesReportSchedulerServiceTest {
     @Test
     void scheduledUpdateReservesSlotBeforeSending() {
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Manila"));
-        String slot = now.toLocalTime().withSecond(0).withNano(0).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        String slot = now.toLocalTime()
+                .withSecond(0)
+                .withNano(0)
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
         String today = now.toLocalDate().toString();
 
         SalesReportConfig config = new SalesReportConfig();
         config.setEnabled(true);
         config.setTimezone("Asia/Manila");
-        config.setTimes(new java.util.ArrayList<>(java.util.List.of(slot)));
+        config.setTimes(new ArrayList<>(List.of(slot)));
         config.setOverviewTime("");
 
         when(configStore.getSnapshot()).thenReturn(config);
@@ -87,12 +90,15 @@ class SalesReportSchedulerServiceTest {
     @Test
     void failedScheduledUpdateClearsReservedSlot() {
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Manila"));
-        String slot = now.toLocalTime().withSecond(0).withNano(0).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        String slot = now.toLocalTime()
+                .withSecond(0)
+                .withNano(0)
+                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
 
         SalesReportConfig config = new SalesReportConfig();
         config.setEnabled(true);
         config.setTimezone("Asia/Manila");
-        config.setTimes(new java.util.ArrayList<>(java.util.List.of(slot)));
+        config.setTimes(new ArrayList<>(List.of(slot)));
         config.setOverviewTime("");
 
         when(configStore.getSnapshot()).thenReturn(config);

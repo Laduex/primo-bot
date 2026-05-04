@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends wget \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && true
+
+COPY python /app/python
+
+RUN pip install --no-cache-dir /app/python
+
+EXPOSE 8086
+
+ENTRYPOINT ["uvicorn", "primobot_py.main:app", "--host", "0.0.0.0", "--port", "8086"]

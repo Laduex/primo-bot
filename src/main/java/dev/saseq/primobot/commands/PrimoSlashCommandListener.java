@@ -64,6 +64,7 @@ public class PrimoSlashCommandListener extends ListenerAdapter {
         }
         if (PrimoCommands.COMMAND_SALES.equals(event.getName())) {
             salesReportCommandHandler.handle(event);
+            return;
         }
     }
 

@@ -13,6 +13,7 @@ Standalone Discord bot service for Primo operations slash commands.
 - Daily branch reminders for unarchived order threads with friendly greeting and wiki-style links
 - `/sales-report` admin command for scheduled multi-account UTAK and Loyverse sales broadcasts
 - Admin direct chat shortcut: send `sales run now` (or `sales run now account <account-id-or-name>`) to Primo and it sends the sales report directly in that chat
+- Meta webhook relay endpoint to push new Messenger/Instagram inbound chats into a Discord channel
 - Guild-specific command registration support via `DISCORD_GUILD_ID`
 - Health endpoint on port `8086`
 
@@ -53,6 +54,15 @@ Sales report variables (all optional bootstrap defaults):
 - `SALES_REPORT_DEFAULT_TARGET_CHANNEL_ID` (default: empty)
 - `SALES_REPORT_DEFAULT_TONE` (default: `casual`)
 - `SALES_REPORT_DEFAULT_SIGNATURE` (default: `Thanks, Primo`)
+
+Meta unread variables:
+
+- `META_ACCESS_TOKEN` (required for Meta unread checks)
+- `META_APP_SECRET` (optional, recommended for `appsecret_proof`)
+- `META_GRAPH_VERSION` (default: `v24.0`)
+- `META_API_BASE_URL` (default: `https://graph.facebook.com`)
+- `META_WEBHOOK_VERIFY_TOKEN` (required for Meta webhook verification challenge)
+- `META_WEBHOOK_TARGET_CHANNEL_ID` (Discord target channel for webhook relay)
 
 Example:
 
@@ -126,6 +136,17 @@ Sales report behavior:
 - Friendly greeting buckets: `Good Morning`, `Good Afternoon`, `Good Evening`
 - Partial failures still post with per-account warnings
 
+## Meta webhook relay
+
+When enabled in Meta App dashboard, incoming Messenger/Instagram chat events can be relayed directly to Discord.
+
+- Verify URL: `GET /webhooks/meta`
+- Event URL: `POST /webhooks/meta`
+- Verification token: `META_WEBHOOK_VERIFY_TOKEN`
+- Target channel: `META_WEBHOOK_TARGET_CHANNEL_ID`
+- Supported Discord target types: text/news/thread direct send, forum post creation
+- If `META_APP_SECRET` is set, webhook payloads must include a valid `X-Hub-Signature-256` header
+
 ## `/sales` command
 
 Admin-only shortcut command for sending reports immediately.
@@ -157,3 +178,15 @@ Health check:
 ```bash
 docker compose up -d --build
 ```
+
+## Python Canary Deploy (Non-Disruptive)
+
+To run the Python branch as a sidecar canary without replacing the Java bot:
+
+```bash
+docker compose --profile python-canary up -d --build primo-bot-python-canary
+```
+
+Canary health check:
+
+- `http://localhost:18086/actuator/health`

@@ -49,6 +49,7 @@ public class PrimoBotConfig {
                         PrimoCommands.COMMAND_COMPLETED,
                         PrimoCommands.COMMAND_ORDERS_REMINDER,
                         PrimoCommands.COMMAND_SALES_REPORT,
+                        "meta-unread",
                         "recipe",
                         "supplier",
                         "primo"
@@ -64,7 +65,7 @@ public class PrimoBotConfig {
         jda.upsertCommand(ordersReminderCommand).queue();
         jda.upsertCommand(salesReportCommand).queue();
         jda.upsertCommand(salesCommand).queue();
-        deleteGlobalCommandsByName(jda, Set.of("recipe", "supplier", "primo"));
+        deleteGlobalCommandsByName(jda, Set.of("meta-unread", "recipe", "supplier", "primo"));
         return jda;
     }
 
@@ -87,7 +88,7 @@ public class PrimoBotConfig {
         guild.upsertCommand(ordersReminderCommand).queue();
         guild.upsertCommand(salesReportCommand).queue();
         guild.upsertCommand(salesCommand).queue();
-        deleteGuildCommandsByName(guild, Set.of("recipe", "supplier", "primo"));
+        deleteGuildCommandsByName(guild, Set.of("meta-unread", "recipe", "supplier", "primo"));
     }
 
     private void deleteGlobalCommandsByName(JDA jda, Set<String> commandNames) {
