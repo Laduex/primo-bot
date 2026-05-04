@@ -4,7 +4,6 @@ import asyncio
 from decimal import Decimal
 from datetime import timedelta
 import logging
-import uuid
 
 import discord
 from discord import app_commands
@@ -24,9 +23,7 @@ from .reminders import OrdersReminderConfigStore, OrdersReminderService, OrdersR
 from .sales import (
     DispatchResult,
     LoyverseApiSalesProvider,
-    SalesAccountConfig,
     SalesCommandService,
-    SalesPlatform,
     SalesReportConfigStore,
     SalesReportExecutorService,
     SalesReportMessageBuilder,
@@ -35,7 +32,6 @@ from .sales import (
     UtakBrowserSalesProvider,
 )
 from .settings import Settings
-from .utils import is_valid_timezone
 
 LOG = logging.getLogger(__name__)
 INTERACTION_CLAIM_NAMESPACE = "slash-interaction"
@@ -134,11 +130,11 @@ class PrimoBot(commands.Bot):
         await self.orders_reminder_store.initialize()
         await self.sales_report_store.initialize()
         await self.meta_unread_store.initialize()
-        await self.tree.sync()
         if self.settings.discord_guild_id:
             guild = discord.Object(id=int(self.settings.discord_guild_id))
-            self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
+        else:
+            await self.tree.sync()
         self._background_tasks.append(
             asyncio.create_task(
                 self._scheduler_loop(
@@ -188,6 +184,13 @@ class PrimoBot(commands.Bot):
             await self.order_handler.handle_auto_mention_thread_create(
                 thread, self.forum_auto_mention_targets
             )
+
+    def set_forum_auto_mention_targets(self, mapping: dict[str, list[str]]) -> None:
+        self.forum_auto_mention_targets = {
+            int(forum_id): [int(role_id) for role_id in role_ids]
+            for forum_id, role_ids in mapping.items()
+            if forum_id.isdigit()
+        }
 
     async def _scheduler_loop(
         self, callback: callable, interval_ms: int, name: str
@@ -302,7 +305,7 @@ class PrimoBot(commands.Bot):
             route = next((item for item in config.routes if item.forumId == str(forum.id)), None)
             if route is None:
                 await interaction.response.send_message(
-                    f"No route is configured for `{forum.name}`. Run `/orders-reminder set-route` first.",
+                    f"No route is configured for `{forum.name}`. Configure it in the Primo dashboard first.",
                     ephemeral=True,
                 )
                 return
@@ -312,477 +315,13 @@ class PrimoBot(commands.Bot):
             messages = {
                 "SENT": f"Manual reminder sent for `{forum_name}` to <#{route.targetTextChannelId}>.",
                 "NO_OPEN_ORDERS": f"No open orders found in `{forum_name}`, so nothing was sent.",
-                "FORUM_NOT_FOUND": f"Could not find forum `<#{route.forumId}>`. Update the route with `/orders-reminder set-route`.",
-                "TARGET_NOT_FOUND": f"Could not find target channel `<#{route.targetTextChannelId}>`. Update the route with `/orders-reminder set-route`.",
-                "ROLE_NOT_FOUND": f"Could not find role `<@&{route.mentionRoleId}>`. Update the route with `/orders-reminder set-route`.",
+                "FORUM_NOT_FOUND": f"Could not find forum `<#{route.forumId}>`. Update the route in the Primo dashboard.",
+                "TARGET_NOT_FOUND": f"Could not find target channel `<#{route.targetTextChannelId}>`. Update the route in the Primo dashboard.",
+                "ROLE_NOT_FOUND": f"Could not find role `<@&{route.mentionRoleId}>`. Update the route in the Primo dashboard.",
                 "ROLE_CANNOT_BE_MENTIONED": "The bot cannot mention that role in the target channel. Make the role mentionable or grant Mention Everyone permission.",
                 "SEND_FAILED": "Failed to send reminder: " + (error or "Unknown error"),
             }
             await interaction.response.send_message(messages[status], ephemeral=True)
-
-        orders_reminder = app_commands.Group(
-            name="orders-reminder", description="Manage daily open-orders reminders"
-        )
-
-        @orders_reminder.command(name="status", description="Show current reminder settings")
-        @app_commands.default_permissions(manage_guild=True)
-        async def orders_reminder_status(interaction: discord.Interaction[discord.Client]) -> None:
-            if not await self._require_manage_server(interaction, "/orders-reminder"):
-                return
-            await interaction.response.send_message(
-                await self.orders_reminder_service.status_text(),
-                ephemeral=True,
-            )
-
-        @orders_reminder.command(name="set-enabled", description="Enable or disable reminders")
-        @app_commands.default_permissions(manage_guild=True)
-        async def orders_reminder_set_enabled(
-            interaction: discord.Interaction[discord.Client], enabled: bool
-        ) -> None:
-            if not await self._require_manage_server(interaction, "/orders-reminder"):
-                return
-            updated = await self.orders_reminder_service.set_enabled(enabled)
-            await interaction.response.send_message(
-                f"Orders reminders are now `{'enabled' if updated.enabled else 'disabled'}`.",
-                ephemeral=True,
-            )
-
-        @orders_reminder.command(
-            name="set-time", description="Set send time and optional timezone"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def orders_reminder_set_time(
-            interaction: discord.Interaction[discord.Client],
-            hour: app_commands.Range[int, 0, 23],
-            minute: app_commands.Range[int, 0, 59],
-            timezone: str | None = None,
-        ) -> None:
-            if not await self._require_manage_server(interaction, "/orders-reminder"):
-                return
-            if timezone and not is_valid_timezone(timezone):
-                await interaction.response.send_message(
-                    "Invalid timezone. Use an IANA timezone like `Asia/Manila`.",
-                    ephemeral=True,
-                )
-                return
-            updated = await self.orders_reminder_service.set_time(hour, minute, timezone)
-            await interaction.response.send_message(
-                f"Reminder time updated to `{updated.hour:02d}:{updated.minute:02d} {updated.timezone}`.",
-                ephemeral=True,
-            )
-
-        @orders_reminder.command(
-            name="set-route", description="Map one order forum to a target text channel and role"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def orders_reminder_set_route(
-            interaction: discord.Interaction[discord.Client],
-            forum: discord.ForumChannel,
-            target: discord.TextChannel,
-            role: discord.Role,
-        ) -> None:
-            if not await self._require_manage_server(interaction, "/orders-reminder"):
-                return
-            if not self.orders_reminder_service.is_orders_category_forum(forum):
-                await interaction.response.send_message(
-                    "Forum must be under the `Orders` category.",
-                    ephemeral=True,
-                )
-                return
-            guild = interaction.guild
-            if guild is None:
-                await interaction.response.send_message(
-                    "This command can only be used inside a Discord server.",
-                    ephemeral=True,
-                )
-                return
-            self_member = guild.me or await guild.fetch_member(self.user.id)  # type: ignore[arg-type]
-            if not self.orders_reminder_service.can_bot_mention_role(
-                self_member, target, role
-            ):
-                await interaction.response.send_message(
-                    "The bot cannot mention that role in the target channel. Make the role mentionable or grant Mention Everyone permission.",
-                    ephemeral=True,
-                )
-                return
-            await self.orders_reminder_service.set_route(forum, target, role)
-            await interaction.response.send_message(
-                f"Route saved: `{forum.name}` -> {target.mention} (role {role.mention}).",
-                ephemeral=True,
-            )
-
-        @orders_reminder.command(name="remove-route", description="Remove route by forum")
-        @app_commands.default_permissions(manage_guild=True)
-        async def orders_reminder_remove_route(
-            interaction: discord.Interaction[discord.Client], forum: discord.ForumChannel
-        ) -> None:
-            if not await self._require_manage_server(interaction, "/orders-reminder"):
-                return
-            removed, _ = await self.orders_reminder_service.remove_route(forum.id)
-            if not removed:
-                await interaction.response.send_message("No route found for that forum.", ephemeral=True)
-                return
-            await interaction.response.send_message(
-                f"Route removed for forum `<#{forum.id}>`.",
-                ephemeral=True,
-            )
-
-        @orders_reminder.command(name="set-copy", description="Set reminder tone and signature")
-        @app_commands.default_permissions(manage_guild=True)
-        @app_commands.choices(
-            tone=[
-                app_commands.Choice(name="casual", value="casual"),
-                app_commands.Choice(name="formal", value="formal"),
-            ]
-        )
-        async def orders_reminder_set_copy(
-            interaction: discord.Interaction[discord.Client],
-            tone: str | None = None,
-            signature: str | None = None,
-        ) -> None:
-            if not await self._require_manage_server(interaction, "/orders-reminder"):
-                return
-            if not (tone and tone.strip()) and not (signature and signature.strip()):
-                await interaction.response.send_message(
-                    "Provide at least one option: `tone` or `signature`.",
-                    ephemeral=True,
-                )
-                return
-            updated = await self.orders_reminder_service.set_copy(tone, signature)
-            await interaction.response.send_message(
-                f"Reminder copy updated. Tone: `{updated.messageTone}`, Signature: `{updated.signature}`.",
-                ephemeral=True,
-            )
-
-        self.tree.add_command(orders_reminder)
-
-        sales_report = app_commands.Group(
-            name="sales-report", description="Manage multi-account UTAK and Loyverse sales reports"
-        )
-
-        @sales_report.command(name="status", description="Show current sales report settings")
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_status(interaction: discord.Interaction[discord.Client]) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            await interaction.response.send_message(
-                await self.sales_command_service.status_text(),
-                ephemeral=True,
-            )
-
-        @sales_report.command(
-            name="set-enabled", description="Enable or disable scheduled sales reports"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_set_enabled(
-            interaction: discord.Interaction[discord.Client], enabled: bool
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            updated = await self.sales_command_service.set_enabled(enabled)
-            await interaction.response.send_message(
-                f"Sales reports are now `{'enabled' if updated.enabled else 'disabled'}`.",
-                ephemeral=True,
-            )
-
-        @sales_report.command(name="set-timezone", description="Set schedule timezone")
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_set_timezone(
-            interaction: discord.Interaction[discord.Client], timezone: str
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            if not is_valid_timezone(timezone):
-                await interaction.response.send_message(
-                    "Invalid timezone. Use an IANA value like `Asia/Manila`.",
-                    ephemeral=True,
-                )
-                return
-            updated = await self.sales_command_service.set_timezone(timezone)
-            await interaction.response.send_message(
-                f"Sales report timezone set to `{updated.timezone}`.",
-                ephemeral=True,
-            )
-
-        @sales_report.command(name="add-time", description="Add one sales update schedule time")
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_add_time(
-            interaction: discord.Interaction[discord.Client],
-            hour: app_commands.Range[int, 0, 23],
-            minute: app_commands.Range[int, 0, 59],
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            slot = f"{hour:02d}:{minute:02d}"
-            added, _ = await self.sales_command_service.add_time(slot)
-            if not added:
-                await interaction.response.send_message(
-                    f"Time `{slot}` is already in the sales update schedule.",
-                    ephemeral=True,
-                )
-                return
-            await interaction.response.send_message(
-                f"Added `{slot}` to sales update schedule.",
-                ephemeral=True,
-            )
-
-        @sales_report.command(
-            name="remove-time", description="Remove one sales update schedule time"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_remove_time(
-            interaction: discord.Interaction[discord.Client],
-            hour: app_commands.Range[int, 0, 23],
-            minute: app_commands.Range[int, 0, 59],
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            slot = f"{hour:02d}:{minute:02d}"
-            removed, _ = await self.sales_command_service.remove_time(slot)
-            if not removed:
-                await interaction.response.send_message(
-                    f"Time `{slot}` is not in the sales update schedule.",
-                    ephemeral=True,
-                )
-                return
-            await interaction.response.send_message(
-                f"Removed `{slot}` from sales update schedule.",
-                ephemeral=True,
-            )
-
-        @sales_report.command(
-            name="clear-times", description="Clear all sales update schedule times"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_clear_times(
-            interaction: discord.Interaction[discord.Client], confirm: bool
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            if not confirm:
-                await interaction.response.send_message(
-                    "Set `confirm:true` to clear all sales update schedule times.",
-                    ephemeral=True,
-                )
-                return
-            await self.sales_command_service.clear_times()
-            await interaction.response.send_message(
-                "Cleared all sales update schedule times.",
-                ephemeral=True,
-            )
-
-        @sales_report.command(
-            name="set-summary", description="Set daily overview channel and schedule time"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_set_summary(
-            interaction: discord.Interaction[discord.Client],
-            target: discord.abc.GuildChannel,
-            hour: app_commands.Range[int, 0, 23],
-            minute: app_commands.Range[int, 0, 59],
-            timezone: str | None = None,
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            if not isinstance(target, (discord.TextChannel, discord.ForumChannel)):
-                await interaction.response.send_message(
-                    "`target` must be a text or forum channel.",
-                    ephemeral=True,
-                )
-                return
-            if timezone and not is_valid_timezone(timezone):
-                await interaction.response.send_message(
-                    "Invalid timezone. Use an IANA value like `Asia/Manila`.",
-                    ephemeral=True,
-                )
-                return
-            slot = f"{hour:02d}:{minute:02d}"
-            updated = await self.sales_command_service.set_summary(target.id, slot, timezone)
-            await interaction.response.send_message(
-                f"Sales overview set to {target.mention} at `{slot}` ({updated.timezone}).",
-                ephemeral=True,
-            )
-
-        @sales_report.command(
-            name="set-channel", description="Set default target channel for sales updates"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_set_channel(
-            interaction: discord.Interaction[discord.Client], target: discord.abc.GuildChannel
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            if not isinstance(target, (discord.TextChannel, discord.ForumChannel)):
-                await interaction.response.send_message(
-                    "`target` must be a text or forum channel.",
-                    ephemeral=True,
-                )
-                return
-            await self.sales_command_service.set_channel(target.id)
-            await interaction.response.send_message(
-                f"Sales update channel set to {target.mention}.",
-                ephemeral=True,
-            )
-
-        @sales_report.command(name="run-now", description="Send a sales report immediately")
-        @app_commands.default_permissions(manage_guild=True)
-        @app_commands.choices(
-            scope=[
-                app_commands.Choice(name="All Accounts", value="all"),
-                app_commands.Choice(name="Single Account", value="single"),
-            ]
-        )
-        @app_commands.autocomplete(account=self._sales_account_autocomplete)
-        async def sales_report_run_now(
-            interaction: discord.Interaction[discord.Client],
-            target: discord.abc.GuildChannel | None = None,
-            scope: str | None = None,
-            account: str | None = None,
-        ) -> None:
-            if not self._claim_interaction_once(interaction):
-                return
-            if interaction.guild is None:
-                await interaction.response.send_message(
-                    "This command can only be used inside a Discord server. In DMs, use `/sales run-now` or `sales run now`.",
-                    ephemeral=True,
-                )
-                return
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            await self._handle_sales_run_now(interaction, target, scope, account, True)
-
-        @sales_report.command(name="list-accounts", description="List configured sales accounts")
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_list_accounts(
-            interaction: discord.Interaction[discord.Client],
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            await interaction.response.send_message(
-                await self.sales_command_service.list_accounts_text(),
-                ephemeral=True,
-            )
-
-        @sales_report.command(name="add-account", description="Add a sales account")
-        @app_commands.default_permissions(manage_guild=True)
-        @app_commands.choices(
-            platform=[
-                app_commands.Choice(name="UTAK", value="UTAK"),
-                app_commands.Choice(name="LOYVERSE", value="LOYVERSE"),
-            ]
-        )
-        async def sales_report_add_account(
-            interaction: discord.Interaction[discord.Client],
-            platform: str,
-            name: str,
-            account_id: str | None = None,
-            username: str | None = None,
-            password: str | None = None,
-            token: str | None = None,
-            base_url: str | None = None,
-            sales_url: str | None = None,
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            sales_platform = SalesPlatform.from_raw(platform)
-            if sales_platform is None:
-                await interaction.response.send_message(
-                    "Invalid platform. Use `UTAK` or `LOYVERSE`.",
-                    ephemeral=True,
-                )
-                return
-            final_account_id = (account_id or "").strip() or self._default_account_id(sales_platform)
-            account_config = SalesAccountConfig(
-                id=final_account_id,
-                platform=sales_platform.value,
-                name=name.strip(),
-                enabled=True,
-                username=(username or "").strip(),
-                password=(password or "").strip(),
-                token=(token or "").strip(),
-                baseUrl=(base_url or "").strip(),
-                salesPageUrl=(sales_url or "").strip(),
-            )
-            ok, message = await self.sales_command_service.add_account(account_config)
-            await interaction.response.send_message(message, ephemeral=True)
-
-        @sales_report.command(name="update-account", description="Update a sales account")
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_update_account(
-            interaction: discord.Interaction[discord.Client],
-            account_id: str,
-            name: str | None = None,
-            enabled: bool | None = None,
-            username: str | None = None,
-            password: str | None = None,
-            token: str | None = None,
-            base_url: str | None = None,
-            sales_url: str | None = None,
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            ok, message = await self.sales_command_service.update_account(
-                account_id,
-                name=name,
-                enabled=enabled,
-                username=username,
-                password=password,
-                token=token,
-                baseUrl=base_url,
-                salesPageUrl=sales_url,
-            )
-            await interaction.response.send_message(message, ephemeral=True)
-
-        @sales_report.command(name="remove-account", description="Remove a sales account")
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_remove_account(
-            interaction: discord.Interaction[discord.Client], account_id: str
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            _, message = await self.sales_command_service.remove_account(account_id)
-            await interaction.response.send_message(message, ephemeral=True)
-
-        @sales_report.command(
-            name="set-account-enabled", description="Enable or disable one account"
-        )
-        @app_commands.default_permissions(manage_guild=True)
-        async def sales_report_set_account_enabled(
-            interaction: discord.Interaction[discord.Client], account_id: str, enabled: bool
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            _, message = await self.sales_command_service.set_account_enabled(account_id, enabled)
-            await interaction.response.send_message(message, ephemeral=True)
-
-        @sales_report.command(name="set-copy", description="Set sales report message tone/signature")
-        @app_commands.default_permissions(manage_guild=True)
-        @app_commands.choices(
-            tone=[
-                app_commands.Choice(name="casual", value="casual"),
-                app_commands.Choice(name="formal", value="formal"),
-            ]
-        )
-        async def sales_report_set_copy(
-            interaction: discord.Interaction[discord.Client],
-            tone: str | None = None,
-            signature: str | None = None,
-        ) -> None:
-            if not await self._require_manage_server(interaction, "sales commands"):
-                return
-            if not (tone and tone.strip()) and not (signature and signature.strip()):
-                await interaction.response.send_message(
-                    "Provide at least one option: `tone` or `signature`.",
-                    ephemeral=True,
-                )
-                return
-            updated = await self.sales_command_service.set_copy(tone, signature)
-            await interaction.response.send_message(
-                f"Sales report copy updated. Tone: `{updated.messageTone}`, Signature: `{updated.signature}`.",
-                ephemeral=True,
-            )
-
-        self.tree.add_command(sales_report)
 
         sales = app_commands.Group(name="sales", description="Send sales reports now")
 
@@ -890,13 +429,13 @@ class PrimoBot(commands.Bot):
                 f"Success: `{result.success_count}`, Failed: `{result.failure_count}`."
             )
         if result.status == "TARGET_NOT_CONFIGURED":
-            return "No target channel configured. Run `/sales-report set-channel` or pass `target` in `/sales-report run-now`."
+            return "No sales target channel is configured. Set it in the Primo dashboard."
         if result.status == "TARGET_NOT_FOUND":
             return f"Target channel `<#{result.target_channel_id}>` was not found."
         if result.status == "ACCOUNT_NOT_FOUND":
             if not result.account_id:
-                return "No matching account was found. Run `/sales-report list-accounts` to check valid account IDs."
-            return f"No account found for id `{result.account_id}`. Run `/sales-report list-accounts` to check valid account IDs."
+                return "No matching sales account was found. Check the Primo dashboard account list."
+            return f"No account found for id `{result.account_id}`. Check the Primo dashboard account list."
         return "Failed to send sales report: " + (result.message or "Unknown error")
 
     def _claim_interaction_once(self, interaction: discord.Interaction[discord.Client]) -> bool:
@@ -961,7 +500,3 @@ class PrimoBot(commands.Bot):
         return await self.sales_command_service.build_run_now_account_choices(
             interaction, current
         )
-
-    @staticmethod
-    def _default_account_id(platform: SalesPlatform) -> str:
-        return platform.value.lower() + "-" + uuid.uuid4().hex[:8]

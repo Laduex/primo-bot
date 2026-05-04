@@ -200,6 +200,9 @@ class MetaWebhookRelayService:
             and self.verify_token == (token or "").strip()
         )
 
+    def set_fallback_target_channel_id(self, target_channel_id: str) -> None:
+        self.fallback_target_channel_id = (target_channel_id or "").strip()
+
     def is_signature_valid(self, raw_body: str | None, header_signature: str | None) -> bool:
         if not self.app_secret:
             return True

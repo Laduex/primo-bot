@@ -32,6 +32,12 @@ def _env_int(name: str, default: int) -> int:
 class Settings:
     discord_token: str
     discord_guild_id: str
+    discord_client_id: str
+    discord_client_secret: str
+    discord_redirect_uri: str
+    dashboard_session_secret: str
+    dashboard_base_url: str
+    dashboard_config_path: str
     forum_auto_mention_targets: str
     order_reminder_tick_ms: int
     sales_report_tick_ms: int
@@ -66,6 +72,14 @@ class Settings:
         return cls(
             discord_token=_env("DISCORD_TOKEN"),
             discord_guild_id=_env("DISCORD_GUILD_ID"),
+            discord_client_id=_env("DISCORD_CLIENT_ID"),
+            discord_client_secret=_env("DISCORD_CLIENT_SECRET"),
+            discord_redirect_uri=_env("DISCORD_REDIRECT_URI"),
+            dashboard_session_secret=_env("DASHBOARD_SESSION_SECRET"),
+            dashboard_base_url=_env("DASHBOARD_BASE_URL"),
+            dashboard_config_path=_env(
+                "DASHBOARD_CONFIG_PATH", "/data/dashboard-config.json"
+            ),
             forum_auto_mention_targets=_env("FORUM_AUTO_MENTION_TARGETS"),
             order_reminder_tick_ms=_env_int("ORDER_REMINDER_TICK_MS", 60000),
             sales_report_tick_ms=_env_int("SALES_REPORT_TICK_MS", 60000),

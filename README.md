@@ -1,6 +1,6 @@
 # Primo Bot
 
-Standalone Discord bot service for Primo operations slash commands.
+Standalone Discord bot service for Primo operations, with a Discord-authenticated web settings dashboard.
 
 ## Features
 
@@ -8,20 +8,21 @@ Standalone Discord bot service for Primo operations slash commands.
 - `/completed` close command for forum posts (run inside a forum thread to archive/close it)
 - `/vat` PH standard VAT calculator (12%), available in server channels and bot DMs
 - Optional forum auto-mention: ping configured roles whenever a user creates a new post in selected forums
-- `/orders-reminder` admin command for daily open-order reminders
+- Dashboard-managed orders reminder settings
 - `/order-remind` admin command to manually send a reminder now for one configured forum route
 - Daily branch reminders for unarchived order threads with friendly greeting and wiki-style links
-- `/sales-report` admin command for scheduled multi-account UTAK and Loyverse sales broadcasts
+- Dashboard-managed scheduled multi-account UTAK and Loyverse sales broadcasts
 - Admin direct chat shortcut: send `sales run now` (or `sales run now account <account-id-or-name>`) to Primo and it sends the sales report directly in that chat
 - Meta webhook relay endpoint to push new Messenger/Instagram inbound chats into a Discord channel
+- Discord OAuth dashboard for guild-scoped settings at `/dashboard`
 - Guild-specific command registration support via `DISCORD_GUILD_ID`
 - Health endpoint on port `8086`
 
 ## Requirements
 
-- Java 17+
-- Maven 3.9+
+- Python 3.11+
 - Discord bot token (`DISCORD_TOKEN`)
+- Discord OAuth application for the dashboard
 
 ## Environment
 
@@ -35,7 +36,16 @@ Required variables:
 
 - `DISCORD_TOKEN`
 - `DISCORD_GUILD_ID` (optional default guild)
-- `FORUM_AUTO_MENTION_TARGETS` (optional): semicolon-separated mapping in `forumId:roleId,roleId` format
+- `DISCORD_CLIENT_ID` (required for dashboard OAuth)
+- `DISCORD_CLIENT_SECRET` (required for dashboard OAuth)
+- `DISCORD_REDIRECT_URI` (required for dashboard OAuth callback)
+- `DASHBOARD_SESSION_SECRET` (required for signed dashboard session cookies)
+
+Optional dashboard variables:
+
+- `DASHBOARD_BASE_URL` (optional absolute base URL used for documentation/deploy clarity)
+- `DASHBOARD_CONFIG_PATH` (default: `/data/dashboard-config.json`)
+- `FORUM_AUTO_MENTION_TARGETS` bootstrap default only; after first dashboard save, auto-mention settings are loaded from `DASHBOARD_CONFIG_PATH`
 
 Orders reminder variables (all optional):
 
@@ -72,23 +82,30 @@ ORDER_REMINDER_DEFAULT_ROUTES=1494503996357087443:1494175620287041536:1494215754
 SALES_REPORT_DEFAULT_TIMES=09:00,12:00,15:00,18:00,21:00
 ```
 
-## `/orders-reminder` command
+## Dashboard
 
-Admin-only command (Manage Server permission required).
+Settings are managed in the Primo dashboard instead of slash config groups.
 
-- `status`
-- `set-enabled enabled:<true|false>`
-- `set-time hour:<0-23> minute:<0-59> timezone:<optional IANA timezone>`
-- `set-route forum:<forum-channel> target:<text-channel> role:<role>`
-- `remove-route forum:<forum-channel>`
-- `set-copy tone:<casual|formal> signature:<text>`
+- Login: `GET /dashboard`
+- OAuth callback: `GET /dashboard/oauth/callback`
+- Guild list: `GET /dashboard/guilds`
+- Guild settings: `GET /dashboard/guilds/{guildId}`
+
+Dashboard sections:
+
+- Orders reminders
+- Sales schedules and delivery targets
+- Sales accounts
+- Forum auto-mention targets
+- Meta unread digest settings
+- Meta webhook target
 
 ## `/order-remind` command
 
 Admin-only command (Manage Server permission required).
 
 - `forum:<forum-channel>` sends the reminder immediately for that configured forum route
-- Uses the same copy/greeting settings from `/orders-reminder`
+- Uses the same copy and greeting settings configured in the dashboard
 - Marks that route as already sent for the day to prevent duplicate scheduled sends
 
 Reminder behavior:
@@ -98,34 +115,7 @@ Reminder behavior:
 - Skips channels with no open orders
 - Greeting buckets: `Good Morning`, `Good Afternoon`, `Good Evening`
 
-## `/sales-report` command
-
-Admin-only command (Manage Server permission required).
-
-- Schedule and channel:
-- `status`
-- `set-enabled enabled:<true|false>`
-- `set-timezone timezone:<IANA timezone>`
-- `add-time hour:<0-23> minute:<0-59>` (sales update slots)
-- `remove-time hour:<0-23> minute:<0-59>` (sales update slots)
-- `clear-times confirm:<true|false>` (sales update slots)
-- `set-summary target:<text-or-forum-channel> hour:<0-23> minute:<0-59> timezone:<optional>` (daily overview slot)
-- `set-channel target:<text-or-forum-channel>` (sales update channel)
-- Run:
-- `run-now target:<optional text-or-forum-channel> scope:<optional all|single> account:<optional>`
-- `target` overrides destination for this run only (does not persist)
-- `scope` defaults to `all`; if `account` is provided and `scope` is omitted, it runs as single-account
-- `account` is required when `scope:single` and supports autocomplete by account name
-- Accounts:
-- `list-accounts`
-- `add-account platform:<UTAK|LOYVERSE> name:<text> account-id:<optional> username:<optional> password:<optional> token:<optional> base-url:<optional> sales-url:<optional>`
-- `update-account account-id:<text> ...`
-- `remove-account account-id:<text>`
-- `set-account-enabled account-id:<text> enabled:<true|false>`
-- Copy:
-- `set-copy tone:<casual|formal> signature:<text>`
-
-Sales report behavior:
+## Sales report behavior
 
 - UTAK metric: **Total Net Sales** (today cumulative)
 - Loyverse metric: **Gross Sales Today** (today cumulative)
@@ -151,7 +141,7 @@ When enabled in Meta App dashboard, incoming Messenger/Instagram chat events can
 
 Admin-only shortcut command for sending reports immediately.
 
-- `run-now target:<text-or-forum-channel> scope:<all|single> account:<optional>`
+- `run-now scope:<all|single> account:<optional>`
 - If `scope:all`, report sends for all enabled accounts
 - If `scope:single`, pick account using autocomplete by name
 
@@ -165,8 +155,9 @@ Admins (Manage Server permission) can also send plain text to Primo:
 ## Run locally
 
 ```bash
-mvn clean package
-java -jar target/primo-bot-1.0.0.jar
+cd python
+python -m pip install -e ".[dev]"
+uvicorn primobot_py.main:app --host 0.0.0.0 --port 8086
 ```
 
 Health check:
@@ -181,7 +172,7 @@ docker compose up -d --build
 
 ## Python Canary Deploy (Non-Disruptive)
 
-To run the Python branch as a sidecar canary without replacing the Java bot:
+To run the Python branch as a sidecar canary without replacing the main bot:
 
 ```bash
 docker compose --profile python-canary up -d --build primo-bot-python-canary

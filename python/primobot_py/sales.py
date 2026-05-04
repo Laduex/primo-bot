@@ -202,7 +202,7 @@ class SalesReportMessageBuilder:
         if not results:
             return self._append_signature(
                 content
-                + "No enabled sales accounts are configured yet. Use `/sales-report add-account` to get started.",
+                + "No enabled sales accounts are configured yet. Add them in the Primo dashboard to get started.",
                 signature,
             )
 
@@ -1754,7 +1754,7 @@ class SalesCommandService:
         selected_account_id = self.resolve_requested_account_id(config, request.account_query)
         if request.account_query and not selected_account_id:
             await message.reply(
-                f"No account found for `{request.account_query}`. Use `/sales-report list-accounts` to check valid account IDs."
+                f"No account found for `{request.account_query}`. Check the Primo dashboard account list."
             )
             return True
 
@@ -1859,10 +1859,10 @@ class SalesCommandService:
             return
         if result.status == "ACCOUNT_NOT_FOUND":
             if not result.account_id:
-                await channel.send("No matching account was found. Run `/sales-report list-accounts` to check valid account IDs.")
+                await channel.send("No matching account was found. Check the Primo dashboard account list.")
             else:
                 await channel.send(
-                    f"No account found for id `{result.account_id}`. Run `/sales-report list-accounts` to check valid account IDs."
+                    f"No account found for id `{result.account_id}`. Check the Primo dashboard account list."
                 )
             return
         await channel.send("Failed to send sales report: " + (result.message or "Unknown error"))
