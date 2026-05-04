@@ -48,6 +48,8 @@ AGENTS.md
 
 # Local runtime secrets
 .env
+data/*.json
+!data/.gitkeep
 
 # Local docs/spec drafts (not part of release commits)
 ai-docs/

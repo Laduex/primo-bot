@@ -1,6 +1,0 @@
-{
-  "enabled" : false,
-  "targetChannelId" : "",
-  "intervalMinutes" : 15,
-  "lastRunAtEpochMs" : 0
-}
