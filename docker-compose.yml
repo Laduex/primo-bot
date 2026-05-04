@@ -35,6 +35,8 @@ services:
       META_UNREAD_DEFAULT_TARGET_CHANNEL_ID: ${META_UNREAD_DEFAULT_TARGET_CHANNEL_ID:-}
       META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN:-}
       META_WEBHOOK_TARGET_CHANNEL_ID: ${META_WEBHOOK_TARGET_CHANNEL_ID:-}
+      OPS_ALERT_CHANNEL_ID: ${OPS_ALERT_CHANNEL_ID:-}
+      OPS_ALERT_TOKEN: ${OPS_ALERT_TOKEN:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8086/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 30s
