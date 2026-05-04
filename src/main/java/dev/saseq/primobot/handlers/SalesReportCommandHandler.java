@@ -7,6 +7,7 @@ import dev.saseq.primobot.sales.SalesReportConfig;
 import dev.saseq.primobot.sales.SalesReportConfigStore;
 import dev.saseq.primobot.sales.SalesReportExecutorService;
 import dev.saseq.primobot.sales.SalesReportSchedulerService;
+import dev.saseq.primobot.util.CrossProcessClaimStore;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -42,19 +43,23 @@ public class SalesReportCommandHandler {
     private static final DateTimeFormatter SLOT_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final Pattern DIRECT_RUN_NOW_PATTERN =
             Pattern.compile("(?i)^sales\\s+run\\s+now(?:\\s+(.*))?$");
+    private static final String DIRECT_MESSAGE_CLAIM_NAMESPACE = "sales-direct-run-now-message";
 
     private final SalesReportConfigStore configStore;
     private final SalesReportExecutorService executorService;
     private final SalesReportSchedulerService schedulerService;
+    private final CrossProcessClaimStore claimStore;
     private final String defaultGuildId;
 
     public SalesReportCommandHandler(SalesReportConfigStore configStore,
                                      SalesReportExecutorService executorService,
                                      SalesReportSchedulerService schedulerService,
+                                     CrossProcessClaimStore claimStore,
                                      @Value("${DISCORD_GUILD_ID:}") String defaultGuildId) {
         this.configStore = configStore;
         this.executorService = executorService;
         this.schedulerService = schedulerService;
+        this.claimStore = claimStore;
         this.defaultGuildId = defaultGuildId == null ? "" : defaultGuildId.trim();
     }
 
@@ -398,6 +403,9 @@ public class SalesReportCommandHandler {
         DirectRunNowRequest request = parseDirectRunNowRequest(event.getMessage().getContentRaw());
         if (request == null) {
             return false;
+        }
+        if (!claimStore.tryClaim(DIRECT_MESSAGE_CLAIM_NAMESPACE, event.getMessageId())) {
+            return true;
         }
         if (request.malformed()) {
             event.getMessage().reply("Usage: `sales run now` or `sales run now account <account-id-or-name>`.").queue();

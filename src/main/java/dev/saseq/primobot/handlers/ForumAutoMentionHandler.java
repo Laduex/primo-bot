@@ -1,5 +1,6 @@
 package dev.saseq.primobot.handlers;
 
+import dev.saseq.primobot.util.CrossProcessClaimStore;
 import net.dv8tion.jda.api.entities.channel.concrete.ForumChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
@@ -25,12 +26,16 @@ public class ForumAutoMentionHandler {
     private static final String ORDERS_CATEGORY_NAME = "Orders";
     private static final String FOLLOW_HINT = "New Order! Acknowledge and follow the post for updates.";
     private static final int HISTORY_LOOKBACK_COUNT = 15;
+    private static final String CLAIM_NAMESPACE = "forum-auto-mention";
 
     private final Map<String, List<String>> forumRoleTargets;
     private final Set<String> processedThreadIds = ConcurrentHashMap.newKeySet();
+    private final CrossProcessClaimStore claimStore;
 
-    public ForumAutoMentionHandler(@Value("${FORUM_AUTO_MENTION_TARGETS:}") String rawForumRoleTargets) {
+    public ForumAutoMentionHandler(@Value("${FORUM_AUTO_MENTION_TARGETS:}") String rawForumRoleTargets,
+                                   CrossProcessClaimStore claimStore) {
         this.forumRoleTargets = parseForumRoleTargets(rawForumRoleTargets);
+        this.claimStore = claimStore;
         if (forumRoleTargets.isEmpty()) {
             LOG.info("Forum auto-mention is disabled. Set FORUM_AUTO_MENTION_TARGETS to enable it.");
         } else {
@@ -66,6 +71,9 @@ public class ForumAutoMentionHandler {
         if (!processedThreadIds.add(thread.getId())) {
             return;
         }
+        if (!claimStore.tryClaim(CLAIM_NAMESPACE, thread.getId())) {
+            return;
+        }
 
         String mentions = roleIds.stream()
                 .map(roleId -> "<@&" + roleId + ">")
@@ -97,6 +105,7 @@ public class ForumAutoMentionHandler {
                 ignored -> LOG.info("Posted forum auto-mention in thread {} (forum {}).", thread.getId(), forumChannel.getId()),
                 failure -> {
                     processedThreadIds.remove(thread.getId());
+                    claimStore.release(CLAIM_NAMESPACE, thread.getId());
                     LOG.warn("Failed to post forum auto-mention in thread {}: {}", thread.getId(), failure.getMessage());
                 }
         );

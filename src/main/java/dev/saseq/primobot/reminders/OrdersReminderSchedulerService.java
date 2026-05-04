@@ -1,6 +1,7 @@
 package dev.saseq.primobot.reminders;
 
 import dev.saseq.primobot.util.DiscordMessageUtils;
+import dev.saseq.primobot.util.CrossProcessClaimStore;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
@@ -26,19 +27,23 @@ import java.util.Map;
 public class OrdersReminderSchedulerService {
     private static final Logger LOG = LoggerFactory.getLogger(OrdersReminderSchedulerService.class);
     private static final int DISCORD_MESSAGE_MAX_LENGTH = 2000;
+    private static final String CLAIM_NAMESPACE = "orders-reminder-schedule";
 
     private final JDA jda;
     private final OrdersReminderConfigStore configStore;
     private final OrdersReminderMessageBuilder messageBuilder;
+    private final CrossProcessClaimStore claimStore;
     private final String defaultGuildId;
 
     public OrdersReminderSchedulerService(JDA jda,
                                           OrdersReminderConfigStore configStore,
                                           OrdersReminderMessageBuilder messageBuilder,
+                                          CrossProcessClaimStore claimStore,
                                           @Value("${DISCORD_GUILD_ID:}") String defaultGuildId) {
         this.jda = jda;
         this.configStore = configStore;
         this.messageBuilder = messageBuilder;
+        this.claimStore = claimStore;
         this.defaultGuildId = defaultGuildId == null ? "" : defaultGuildId.trim();
     }
 
@@ -75,21 +80,28 @@ public class OrdersReminderSchedulerService {
             if (todayString.equals(lastRunByRoute.get(routeKey))) {
                 continue;
             }
+            String claimKey = todayString + "|" + routeKey;
+            if (!claimStore.tryClaim(CLAIM_NAMESPACE, claimKey)) {
+                continue;
+            }
 
             ForumChannel forum = guild.getForumChannelById(route.getForumId());
             if (forum == null) {
+                claimStore.release(CLAIM_NAMESPACE, claimKey);
                 LOG.warn("Orders reminder route skipped: forum {} not found.", route.getForumId());
                 continue;
             }
 
             TextChannel target = guild.getTextChannelById(route.getTargetTextChannelId());
             if (target == null) {
+                claimStore.release(CLAIM_NAMESPACE, claimKey);
                 LOG.warn("Orders reminder route skipped: target channel {} not found.", route.getTargetTextChannelId());
                 continue;
             }
 
             Role role = guild.getRoleById(route.getMentionRoleId());
             if (role == null) {
+                claimStore.release(CLAIM_NAMESPACE, claimKey);
                 LOG.warn("Orders reminder route skipped: role {} not found.", route.getMentionRoleId());
                 continue;
             }
@@ -100,6 +112,7 @@ public class OrdersReminderSchedulerService {
                     .toList());
 
             if (openThreads.isEmpty()) {
+                claimStore.release(CLAIM_NAMESPACE, claimKey);
                 continue;
             }
 
@@ -121,6 +134,7 @@ public class OrdersReminderSchedulerService {
                 configUpdated = true;
                 LOG.info("Posted orders reminder for forum {} into channel {}.", forum.getId(), target.getId());
             } catch (Exception ex) {
+                claimStore.release(CLAIM_NAMESPACE, claimKey);
                 LOG.warn("Failed sending orders reminder for forum {}: {}", forum.getId(), ex.getMessage());
             }
         }

@@ -2,6 +2,7 @@ package dev.saseq.primobot.sales;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
+import dev.saseq.primobot.util.CrossProcessClaimStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,19 +21,23 @@ public class SalesReportSchedulerService {
     private static final DateTimeFormatter SLOT_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final String UPDATE_SLOT_KEY_PREFIX = "update:";
     private static final String OVERVIEW_SLOT_KEY_PREFIX = "overview:";
+    private static final String CLAIM_NAMESPACE = "sales-schedule";
 
     private final JDA jda;
     private final SalesReportConfigStore configStore;
     private final SalesReportExecutorService executorService;
+    private final CrossProcessClaimStore claimStore;
     private final String defaultGuildId;
 
     public SalesReportSchedulerService(@Lazy JDA jda,
                                        SalesReportConfigStore configStore,
                                        SalesReportExecutorService executorService,
+                                       CrossProcessClaimStore claimStore,
                                        @Value("${DISCORD_GUILD_ID:}") String defaultGuildId) {
         this.jda = jda;
         this.configStore = configStore;
         this.executorService = executorService;
+        this.claimStore = claimStore;
         this.defaultGuildId = defaultGuildId == null ? "" : defaultGuildId.trim();
     }
 
@@ -62,7 +67,10 @@ public class SalesReportSchedulerService {
         if (!overviewSlot.isBlank()
                 && overviewSlot.equals(slot)
                 && !alreadyRanToday(config, slotKey(true, slot), slot, todayText)) {
-            dispatchScheduled(guild, config, slot, todayText, true);
+            String claimKey = todayText + "|" + slotKey(true, slot);
+            if (claimStore.tryClaim(CLAIM_NAMESPACE, claimKey)) {
+                dispatchScheduled(guild, config, slot, todayText, claimKey, true);
+            }
             return;
         }
 
@@ -70,7 +78,10 @@ public class SalesReportSchedulerService {
                 && config.getTimes().contains(slot)
                 && !slot.equals(overviewSlot)
                 && !alreadyRanToday(config, slotKey(false, slot), slot, todayText)) {
-            dispatchScheduled(guild, config, slot, todayText, false);
+            String claimKey = todayText + "|" + slotKey(false, slot);
+            if (claimStore.tryClaim(CLAIM_NAMESPACE, claimKey)) {
+                dispatchScheduled(guild, config, slot, todayText, claimKey, false);
+            }
         }
     }
 
@@ -85,6 +96,7 @@ public class SalesReportSchedulerService {
                                    SalesReportConfig config,
                                    String slot,
                                    String todayText,
+                                   String claimKey,
                                    boolean dailyOverview) {
         String slotKey = slotKey(dailyOverview, slot);
         config.getLastRunDateBySlot().put(slotKey, todayText);
@@ -106,14 +118,16 @@ public class SalesReportSchedulerService {
                         result.successCount(),
                         result.failureCount());
             }
+            return;
+        }
+
+        config.getLastRunDateBySlot().remove(slotKey);
+        configStore.replaceAndPersist(config);
+        claimStore.release(CLAIM_NAMESPACE, claimKey);
+        if (dailyOverview) {
+            LOG.warn("Scheduled daily sales overview failed for slot {}: {}", slot, result.message());
         } else {
-            config.getLastRunDateBySlot().remove(slotKey);
-            configStore.replaceAndPersist(config);
-            if (dailyOverview) {
-                LOG.warn("Scheduled daily sales overview failed for slot {}: {}", slot, result.message());
-            } else {
-                LOG.warn("Scheduled sales update failed for slot {}: {}", slot, result.message());
-            }
+            LOG.warn("Scheduled sales update failed for slot {}: {}", slot, result.message());
         }
     }
 
