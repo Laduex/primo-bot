@@ -217,6 +217,12 @@ class PrimoBot(commands.Bot):
             ]
         )
         async def vat(interaction: discord.Interaction[discord.Client], amount: float, basis: str) -> None:
+            if interaction.guild is None and not await self._is_shared_guild_member(interaction.user):
+                await interaction.response.send_message(
+                    "You need to be a member of a server that shares this bot to use `/vat` in DMs.",
+                    ephemeral=True,
+                )
+                return
             from .vat import VatBasis, VatCalculator
 
             try:
@@ -920,6 +926,29 @@ class PrimoBot(commands.Bot):
             )
             return False
         return True
+
+    async def _is_shared_guild_member(self, user: discord.abc.User) -> bool:
+        if self.settings.discord_guild_id:
+            guild = self.get_guild(int(self.settings.discord_guild_id))
+            if guild is not None:
+                member = guild.get_member(user.id)
+                if member is None:
+                    try:
+                        member = await guild.fetch_member(user.id)
+                    except discord.HTTPException:
+                        member = None
+                if member is not None:
+                    return True
+        for guild in self.guilds:
+            member = guild.get_member(user.id)
+            if member is None:
+                try:
+                    member = await guild.fetch_member(user.id)
+                except discord.HTTPException:
+                    continue
+            if member is not None:
+                return True
+        return False
 
     async def _forum_autocomplete(
         self, interaction: discord.Interaction[discord.Client], current: str
