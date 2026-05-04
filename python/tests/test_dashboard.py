@@ -6,6 +6,8 @@ from pathlib import Path
 from primobot_py.dashboard import (
     DashboardConfig,
     DashboardConfigStore,
+    DiscordGuildAccess,
+    DiscordGuildAccessCache,
     DashboardSession,
     DashboardSessionSigner,
 )
@@ -97,3 +99,29 @@ async def _test_dashboard_config_store_normalizes_values(tmp_path: Path) -> None
         "1494503996357087443": ["1494215754084651089"]
     }
     assert snapshot.metaWebhookTargetChannelId == ""
+
+
+def test_discord_guild_access_cache_expires_entries() -> None:
+    cache = DiscordGuildAccessCache(ttl_seconds=60)
+    guilds = [
+        DiscordGuildAccess(
+            id="1478671501338214410",
+            name="Primo",
+            icon="",
+            permissions=32,
+            owner=False,
+        )
+    ]
+
+    cache.put(
+        "access-token",
+        guilds,
+        now_epoch_ms=1_000,
+        session_expires_at_epoch_ms=100_000,
+    )
+
+    cached = cache.get("access-token", now_epoch_ms=30_000)
+    expired = cache.get("access-token", now_epoch_ms=62_000)
+
+    assert cached == guilds
+    assert expired is None

@@ -16,6 +16,7 @@ from .dashboard import (
     DashboardSession,
     DashboardSessionSigner,
     DiscordGuildAccess,
+    DiscordGuildAccessCache,
     DiscordOAuthClient,
     render_dashboard_login_page,
     render_guild_dashboard_page,
@@ -55,6 +56,7 @@ dashboard_config_service = DashboardConfigService(
 )
 app = FastAPI(title="primo-bot-python", version="0.2.0")
 _bot_task: asyncio.Task[None] | None = None
+_guild_access_cache = DiscordGuildAccessCache(ttl_seconds=60)
 
 
 def _build_signer() -> DashboardSessionSigner:
@@ -122,9 +124,22 @@ def _clear_cookie(response: Response, name: str) -> None:
 
 
 def _oauth_guilds(session: DashboardSession) -> list[DiscordGuildAccess]:
+    now_epoch_ms = int(time.time() * 1000)
+    cached = _guild_access_cache.get(session.access_token, now_epoch_ms)
+    if cached is not None:
+        return cached
     try:
-        return _build_oauth_client().list_user_guilds(session.access_token)
+        guilds = _build_oauth_client().list_user_guilds(session.access_token)
+        _guild_access_cache.put(
+            session.access_token,
+            guilds,
+            now_epoch_ms,
+            session.expires_at_epoch_ms,
+        )
+        return guilds
     except Exception as ex:
+        if cached is not None:
+            return cached
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Failed to load Discord guild access: " + str(ex),

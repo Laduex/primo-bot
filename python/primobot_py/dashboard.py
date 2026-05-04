@@ -72,6 +72,35 @@ class DiscordGuildAccess:
         return self.owner or bool(self.permissions & MANAGE_GUILD_PERMISSION)
 
 
+class DiscordGuildAccessCache:
+    def __init__(self, ttl_seconds: int = 60) -> None:
+        self._ttl_ms = max(1, ttl_seconds) * 1000
+        self._entries: dict[str, tuple[int, list[DiscordGuildAccess]]] = {}
+
+    def get(self, key: str, now_epoch_ms: int) -> list[DiscordGuildAccess] | None:
+        entry = self._entries.get(key)
+        if entry is None:
+            return None
+        expires_at_epoch_ms, guilds = entry
+        if expires_at_epoch_ms <= now_epoch_ms:
+            self._entries.pop(key, None)
+            return None
+        return list(guilds)
+
+    def put(
+        self,
+        key: str,
+        guilds: list[DiscordGuildAccess],
+        now_epoch_ms: int,
+        session_expires_at_epoch_ms: int,
+    ) -> None:
+        expires_at_epoch_ms = min(
+            session_expires_at_epoch_ms,
+            now_epoch_ms + self._ttl_ms,
+        )
+        self._entries[key] = (expires_at_epoch_ms, list(guilds))
+
+
 class DashboardConfigStore:
     def __init__(
         self,
