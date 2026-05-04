@@ -25,6 +25,10 @@ from .utils import is_snowflake, is_valid_timezone, normalize_hhmm
 DISCORD_API_BASE_URL = "https://discord.com/api/v10"
 DISCORD_OAUTH_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 MANAGE_GUILD_PERMISSION = 1 << 5
+DISCORD_API_HEADERS = {
+    "Accept": "application/json",
+    "User-Agent": "PrimoBotDashboard/0.1 (+https://discord.com/developers/applications)",
+}
 
 
 @dataclass(slots=True)
@@ -296,7 +300,10 @@ class DiscordOAuthClient:
         request = Request(
             DISCORD_API_BASE_URL + path,
             data=body,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                **DISCORD_API_HEADERS,
+            },
             method="POST",
         )
         with urlopen(request, timeout=15) as response:
@@ -306,7 +313,10 @@ class DiscordOAuthClient:
     def _get_json(self, path: str, access_token: str) -> Any:
         request = Request(
             DISCORD_API_BASE_URL + path,
-            headers={"Authorization": "Bearer " + access_token},
+            headers={
+                "Authorization": "Bearer " + access_token,
+                **DISCORD_API_HEADERS,
+            },
             method="GET",
         )
         with urlopen(request, timeout=15) as response:
