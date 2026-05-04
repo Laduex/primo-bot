@@ -8,6 +8,7 @@ import hmac
 import json
 import logging
 from pathlib import Path
+import time
 from typing import Any, Protocol
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -30,6 +31,8 @@ CONVERSATION_FIELDS = "id,updated_time,snippet,unread_count,senders"
 CONVERSATION_PAGE_LIMIT = 5
 MAX_UNREAD_CONVERSATIONS_PER_PAGE_PLATFORM = 5
 MAX_UNREAD_CONVERSATIONS_PER_PLATFORM = 5
+GRAPH_REQUEST_MAX_ATTEMPTS = 3
+GRAPH_RETRY_BACKOFF_SECONDS = 1.0
 RUN_AT_FORMAT = "%Y-%m-%d %H:%M:%S %Z"
 AUTO_REPLY_MARKER = "we've received your message and will get back to you shortly"
 
@@ -223,7 +226,7 @@ class MetaGraphApiClient:
             params = {"fields": PAGES_FIELDS, "limit": "100"}
             if after:
                 params["after"] = after
-            root = self._call_graph("/me/accounts", self.user_access_token, params)
+            root = self._call_graph_with_retry("/me/accounts", self.user_access_token, params)
             for node in self._data_nodes(root):
                 page_id = self._text(node, "id")
                 page_name = self._text(node, "name")
@@ -262,7 +265,9 @@ class MetaGraphApiClient:
                 params["platform"] = "instagram"
             if after:
                 params["after"] = after
-            root = self._call_graph(f"/{page.page_id}/conversations", page.page_access_token, params)
+            root = self._call_graph_with_retry(
+                f"/{page.page_id}/conversations", page.page_access_token, params
+            )
             for node in self._data_nodes(root):
                 unread_count = self._int_value(node.get("unread_count"))
                 if unread_count <= 0:
@@ -307,6 +312,32 @@ class MetaGraphApiClient:
         except json.JSONDecodeError as ex:
             raise RuntimeError("Meta API returned invalid JSON") from ex
 
+    def _call_graph_with_retry(
+        self, path: str, access_token: str, params: dict[str, str]
+    ) -> dict[str, Any]:
+        last_runtime_error: RuntimeError | None = None
+        last_api_error: MetaGraphApiException | None = None
+
+        for attempt in range(1, GRAPH_REQUEST_MAX_ATTEMPTS + 1):
+            try:
+                return self._call_graph(path, access_token, params)
+            except MetaGraphApiException as ex:
+                last_api_error = ex
+                if not self._should_retry_api_error(ex, attempt):
+                    raise
+                self._sleep_before_retry(attempt)
+            except RuntimeError as ex:
+                last_runtime_error = ex
+                if not self._should_retry_runtime_error(ex, attempt):
+                    raise
+                self._sleep_before_retry(attempt)
+
+        if last_api_error is not None:
+            raise last_api_error
+        if last_runtime_error is not None:
+            raise last_runtime_error
+        raise RuntimeError("Meta API retry loop exited without a result.")
+
     def _build_url(self, path: str, access_token: str, params: dict[str, str]) -> str:
         normalized_path = path if path.startswith("/") else "/" + path
         query = dict(params)
@@ -343,6 +374,27 @@ class MetaGraphApiClient:
             str(error.get("fbtrace_id", "")),
             str(error.get("message", "Unknown Meta API error")),
         )
+
+    def _should_retry_api_error(self, ex: MetaGraphApiException, attempt: int) -> bool:
+        if attempt >= GRAPH_REQUEST_MAX_ATTEMPTS:
+            return False
+        if ex.code == -2 or ex.status >= 500:
+            return True
+        message = (ex.error_message or "").strip().lower()
+        return "timeout" in message or "temporarily unavailable" in message
+
+    def _should_retry_runtime_error(self, ex: RuntimeError, attempt: int) -> bool:
+        if attempt >= GRAPH_REQUEST_MAX_ATTEMPTS:
+            return False
+        message = str(ex).strip().lower()
+        return (
+            "timeout" in message
+            or "timed out" in message
+            or "temporarily unavailable" in message
+        )
+
+    def _sleep_before_retry(self, attempt: int) -> None:
+        time.sleep(GRAPH_RETRY_BACKOFF_SECONDS * attempt)
 
     def _next_after_cursor(self, root: dict[str, Any]) -> str:
         paging = root.get("paging", {})

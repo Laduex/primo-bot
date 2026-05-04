@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetaGraphApiClientTest {
@@ -126,6 +128,93 @@ class MetaGraphApiClientTest {
         assertEquals("instagram", unread.get(0).platform());
         assertEquals("t_3", unread.get(1).conversationId());
         assertTrue(urls.get(0).contains("limit=5"));
+    }
+
+    @Test
+    void listUnreadConversationsRetriesTimeoutResponses() {
+        AtomicInteger attempts = new AtomicInteger();
+        MetaGraphApiClient.GraphTransport transport = (url, mapper) -> {
+            if (attempts.incrementAndGet() < 3) {
+                throw new MetaGraphApiException(
+                        400,
+                        -2,
+                        null,
+                        "OAuthException",
+                        "trace123",
+                        "Timeout"
+                );
+            }
+            return json("""
+                    {
+                      "data": [
+                        {
+                          "id": "ig_1",
+                          "updated_time": "2026-04-25T05:00:00+0000",
+                          "snippet": "Checking in",
+                          "unread_count": 1,
+                          "senders": {"data": [{"name": "Aly"}]}
+                        }
+                      ]
+                    }
+                    """);
+        };
+
+        MetaGraphApiClient client = new MetaGraphApiClient(
+                "https://graph.facebook.com",
+                "v24.0",
+                "user-token",
+                "",
+                transport,
+                objectMapper
+        );
+
+        MetaPageAccess page = new MetaPageAccess(
+                "297424713461571",
+                "Primal Brew Roastery",
+                "page-token",
+                "",
+                "");
+
+        List<MetaUnreadConversation> unread = client.listUnreadConversations(page, "instagram");
+
+        assertEquals(1, unread.size());
+        assertEquals(3, attempts.get());
+        assertEquals("ig_1", unread.get(0).conversationId());
+    }
+
+    @Test
+    void listUnreadConversationsDoesNotRetryPermissionErrors() {
+        AtomicInteger attempts = new AtomicInteger();
+        MetaGraphApiClient.GraphTransport transport = (url, mapper) -> {
+            attempts.incrementAndGet();
+            throw new MetaGraphApiException(
+                    403,
+                    230,
+                    null,
+                    "OAuthException",
+                    "trace456",
+                    "Requires instagram_manage_messages permission"
+            );
+        };
+
+        MetaGraphApiClient client = new MetaGraphApiClient(
+                "https://graph.facebook.com",
+                "v24.0",
+                "user-token",
+                "",
+                transport,
+                objectMapper
+        );
+
+        MetaPageAccess page = new MetaPageAccess(
+                "297424713461571",
+                "Primal Brew Roastery",
+                "page-token",
+                "",
+                "");
+
+        assertThrows(MetaGraphApiException.class, () -> client.listUnreadConversations(page, "instagram"));
+        assertEquals(1, attempts.get());
     }
 
     private JsonNode json(String raw) {

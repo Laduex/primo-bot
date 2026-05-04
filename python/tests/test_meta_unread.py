@@ -6,6 +6,9 @@ from pathlib import Path
 
 from primobot_py.claims import CrossProcessClaimStore
 from primobot_py.meta_unread import (
+    MetaGraphApiClient,
+    MetaGraphApiException,
+    MetaPageAccess,
     MetaUnreadConfig,
     MetaUnreadConfigStore,
     MetaUnreadConversation,
@@ -110,6 +113,57 @@ def test_meta_unread_message_builder_formats_digest() -> None:
     assert "**Instagram Warnings**" in content
 
 
+def test_meta_graph_api_client_retries_timeout_error() -> None:
+    client = _RetryingMetaGraphApiClient(
+        "https://graph.facebook.com",
+        "v24.0",
+        "user-token",
+        "",
+    )
+
+    unread = client.list_unread_conversations(
+        MetaPageAccess(
+            page_id="297424713461571",
+            page_name="Primal Brew Roastery",
+            page_access_token="page-token",
+            instagram_account_id="",
+            instagram_username="",
+        ),
+        "instagram",
+    )
+
+    assert len(unread) == 1
+    assert unread[0].conversation_id == "ig-1"
+    assert client.attempts == 3
+
+
+def test_meta_graph_api_client_does_not_retry_permission_error() -> None:
+    client = _PermissionErrorMetaGraphApiClient(
+        "https://graph.facebook.com",
+        "v24.0",
+        "user-token",
+        "",
+    )
+
+    try:
+        client.list_unread_conversations(
+            MetaPageAccess(
+                page_id="297424713461571",
+                page_name="Primal Brew Roastery",
+                page_access_token="page-token",
+                instagram_account_id="",
+                instagram_username="",
+            ),
+            "instagram",
+        )
+    except MetaGraphApiException as ex:
+        assert ex.code == 230
+    else:
+        raise AssertionError("Expected MetaGraphApiException")
+
+    assert client.attempts == 1
+
+
 def test_meta_unread_scheduler_due_logic() -> None:
     scheduler = MetaUnreadSchedulerService(
         bot=_StubBot(),
@@ -154,3 +208,42 @@ class _StubStore:
 class _StubExecutor:
     async def execute(self, guild: object, config: MetaUnreadConfig) -> object:
         return object()
+
+
+class _RetryingMetaGraphApiClient(MetaGraphApiClient):
+    def __init__(self, api_base_url: str, graph_version: str, user_access_token: str, app_secret: str) -> None:
+        super().__init__(api_base_url, graph_version, user_access_token, app_secret)
+        self.attempts = 0
+
+    def _call_graph(self, path: str, access_token: str, params: dict[str, str]) -> dict[str, object]:
+        self.attempts += 1
+        if self.attempts < 3:
+            raise MetaGraphApiException(400, -2, None, "OAuthException", "trace123", "Timeout")
+        return {
+            "data": [
+                {
+                    "id": "ig-1",
+                    "updated_time": "2026-04-30T01:30:00+00:00",
+                    "snippet": "Need help",
+                    "unread_count": 2,
+                    "senders": {"data": [{"name": "Alex"}]},
+                }
+            ]
+        }
+
+
+class _PermissionErrorMetaGraphApiClient(MetaGraphApiClient):
+    def __init__(self, api_base_url: str, graph_version: str, user_access_token: str, app_secret: str) -> None:
+        super().__init__(api_base_url, graph_version, user_access_token, app_secret)
+        self.attempts = 0
+
+    def _call_graph(self, path: str, access_token: str, params: dict[str, str]) -> dict[str, object]:
+        self.attempts += 1
+        raise MetaGraphApiException(
+            403,
+            230,
+            None,
+            "OAuthException",
+            "trace456",
+            "Requires instagram_manage_messages permission",
+        )

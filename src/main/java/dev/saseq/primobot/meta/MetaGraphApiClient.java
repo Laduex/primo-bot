@@ -27,6 +27,8 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
     private static final String CONVERSATION_FIELDS = "id,updated_time,snippet,unread_count,senders";
     private static final int CONVERSATION_PAGE_LIMIT = 5;
     private static final int MAX_UNREAD_CONVERSATIONS_PER_PAGE_PLATFORM = 5;
+    private static final int GRAPH_REQUEST_MAX_ATTEMPTS = 3;
+    private static final long GRAPH_RETRY_BACKOFF_MILLIS = 1_000L;
 
     private final String apiBaseUrl;
     private final String graphVersion;
@@ -75,7 +77,7 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
                 params.put("after", after);
             }
 
-            JsonNode root = callGraph("/me/accounts", userAccessToken, params);
+            JsonNode root = callGraphWithRetry("/me/accounts", userAccessToken, params);
             JsonNode data = root.path("data");
             if (data.isArray()) {
                 for (JsonNode node : data) {
@@ -123,7 +125,7 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
                 params.put("after", after);
             }
 
-            JsonNode root = callGraph("/" + page.pageId() + "/conversations", page.pageAccessToken(), params);
+            JsonNode root = callGraphWithRetry("/" + page.pageId() + "/conversations", page.pageAccessToken(), params);
             JsonNode data = root.path("data");
             if (data.isArray()) {
                 for (JsonNode node : data) {
@@ -162,6 +164,37 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
     private JsonNode callGraph(String path, String accessToken, Map<String, String> params) {
         String url = buildUrl(path, accessToken, params);
         return transport.get(url, objectMapper);
+    }
+
+    private JsonNode callGraphWithRetry(String path, String accessToken, Map<String, String> params) {
+        RuntimeException lastRuntimeException = null;
+        MetaGraphApiException lastApiException = null;
+
+        for (int attempt = 1; attempt <= GRAPH_REQUEST_MAX_ATTEMPTS; attempt++) {
+            try {
+                return callGraph(path, accessToken, params);
+            } catch (MetaGraphApiException ex) {
+                lastApiException = ex;
+                if (!shouldRetry(attempt, ex)) {
+                    throw ex;
+                }
+                sleepBeforeRetry(attempt);
+            } catch (RuntimeException ex) {
+                lastRuntimeException = ex;
+                if (!shouldRetry(attempt, ex)) {
+                    throw ex;
+                }
+                sleepBeforeRetry(attempt);
+            }
+        }
+
+        if (lastApiException != null) {
+            throw lastApiException;
+        }
+        if (lastRuntimeException != null) {
+            throw lastRuntimeException;
+        }
+        throw new IllegalStateException("Meta API retry loop exited without a result.");
     }
 
     private String buildUrl(String path, String accessToken, Map<String, String> params) {
@@ -213,6 +246,57 @@ public class MetaGraphApiClient implements MetaUnreadApiClient {
     private String nextAfterCursor(JsonNode root) {
         JsonNode after = root.path("paging").path("cursors").path("after");
         return after.isTextual() ? after.asText("").trim() : "";
+    }
+
+    private boolean shouldRetry(int attempt, MetaGraphApiException ex) {
+        return attempt < GRAPH_REQUEST_MAX_ATTEMPTS && isRetryable(ex);
+    }
+
+    private boolean shouldRetry(int attempt, RuntimeException ex) {
+        return attempt < GRAPH_REQUEST_MAX_ATTEMPTS && isRetryable(ex);
+    }
+
+    private boolean isRetryable(MetaGraphApiException ex) {
+        if (ex == null) {
+            return false;
+        }
+
+        Integer code = ex.code();
+        if (code != null && code == -2) {
+            return true;
+        }
+
+        if (ex.status() >= 500) {
+            return true;
+        }
+
+        String message = ex.errorMessage();
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+
+        String normalized = message.trim().toLowerCase(Locale.ENGLISH);
+        return normalized.contains("timeout") || normalized.contains("temporarily unavailable");
+    }
+
+    private boolean isRetryable(RuntimeException ex) {
+        if (ex == null || ex.getMessage() == null || ex.getMessage().isBlank()) {
+            return false;
+        }
+
+        String normalized = ex.getMessage().trim().toLowerCase(Locale.ENGLISH);
+        return normalized.contains("timeout")
+                || normalized.contains("timed out")
+                || normalized.contains("temporarily unavailable");
+    }
+
+    private void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(GRAPH_RETRY_BACKOFF_MILLIS * attempt);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Meta API retry interrupted", interrupted);
+        }
     }
 
     private String resolveSenderName(JsonNode sendersNode, String fallbackPageName) {
