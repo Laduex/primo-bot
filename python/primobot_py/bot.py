@@ -132,7 +132,14 @@ class PrimoBot(commands.Bot):
         await self.meta_unread_store.initialize()
         if self.settings.discord_guild_id:
             guild = discord.Object(id=int(self.settings.discord_guild_id))
+            self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
+
+            # Keep only DM-safe slash commands global. Syncing global scope after
+            # trimming the local tree removes stale dashboard-era commands too.
+            for command_name in ("order", "completed", "order-remind"):
+                self.tree.remove_command(command_name)
+            await self.tree.sync()
         else:
             await self.tree.sync()
         self._background_tasks.append(
