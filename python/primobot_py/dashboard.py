@@ -862,152 +862,844 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
   <title>Primo Dashboard · {safe_guild_name}</title>
   <style>
     :root {{
-      color-scheme: dark;
-      --bg: #0f172a;
-      --panel: #111827;
-      --border: #334155;
-      --muted: #94a3b8;
-      --text: #e2e8f0;
-      --accent: #22c55e;
-      --button: #2563eb;
-      --danger: #dc2626;
+      color-scheme: light;
+      --bg: #f6f1e7;
+      --bg-strong: #efe6d5;
+      --panel: #ffffff;
+      --panel-soft: #fffaf0;
+      --panel-accent: #fff3df;
+      --border: #e7dcc8;
+      --border-strong: #d9c19a;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --muted-strong: #475569;
+      --navy: #081a36;
+      --navy-soft: #10213d;
+      --amber: #d97706;
+      --amber-strong: #b45309;
+      --amber-soft: #fff7ed;
+      --success: #15803d;
+      --success-soft: #dcfce7;
+      --danger: #b91c1c;
+      --danger-soft: #fee2e2;
+      --shadow: 0 16px 40px rgba(8, 26, 54, 0.08);
     }}
-    body {{ margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: radial-gradient(circle at top, #1e293b, var(--bg)); color: var(--text); }}
-    header {{ padding: 24px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
-    main {{ width: min(1100px, calc(100vw - 32px)); margin: 24px auto 64px; display: grid; gap: 16px; }}
-    .card {{ background: rgba(15, 23, 42, 0.88); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }}
-    h1, h2 {{ margin-top: 0; }}
-    p, label, small {{ color: var(--muted); }}
-    .grid {{ display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }}
-    .row {{ display: grid; gap: 8px; margin-bottom: 12px; }}
-    input, select, textarea {{ width: 100%; box-sizing: border-box; background: #020617; border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 10px 12px; }}
-    textarea {{ min-height: 96px; }}
-    button {{ background: var(--button); color: white; border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; }}
-    button.secondary {{ background: #475569; }}
-    button.danger {{ background: var(--danger); }}
-    .toolbar {{ display: flex; gap: 8px; flex-wrap: wrap; }}
-    .banner {{ display: none; border-radius: 12px; padding: 12px 14px; }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(217, 119, 6, 0.16), transparent 30%),
+        radial-gradient(circle at top right, rgba(8, 26, 54, 0.08), transparent 28%),
+        linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+    }}
+    a {{ color: inherit; }}
+    h1, h2, h3, p {{ margin: 0; }}
+    .shell {{
+      width: min(1180px, calc(100vw - 32px));
+      margin: 28px auto 72px;
+      display: grid;
+      gap: 18px;
+    }}
+    .shell-card {{
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }}
+    .hero {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      padding: 26px 28px;
+      background:
+        linear-gradient(135deg, rgba(8, 26, 54, 0.98), rgba(16, 33, 61, 0.94)),
+        linear-gradient(120deg, rgba(217, 119, 6, 0.18), transparent 55%);
+      color: #fff7ed;
+      border-color: rgba(8, 26, 54, 0.35);
+    }}
+    .eyebrow {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 247, 237, 0.12);
+      border: 1px solid rgba(255, 247, 237, 0.18);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }}
+    .hero h1 {{
+      margin-top: 14px;
+      font-size: clamp(2rem, 3vw, 2.75rem);
+      line-height: 1.04;
+      letter-spacing: -0.04em;
+    }}
+    .hero p {{
+      margin-top: 10px;
+      max-width: 60ch;
+      color: rgba(255, 247, 237, 0.78);
+      font-size: 15px;
+      line-height: 1.6;
+    }}
+    .hero-chips {{
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }}
+    .hero-chip {{
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 247, 237, 0.12);
+      border: 1px solid rgba(255, 247, 237, 0.16);
+      color: rgba(255, 247, 237, 0.92);
+      font-size: 13px;
+      font-weight: 600;
+    }}
+    .hero-actions {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: flex-end;
+      gap: 10px;
+    }}
+    .inline-form {{ margin: 0; }}
+    .button {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 10px 16px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease;
+    }}
+    .button:hover {{ transform: translateY(-1px); }}
+    .button:disabled {{
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }}
+    .button.primary {{
+      background: var(--amber);
+      color: white;
+      box-shadow: 0 10px 24px rgba(180, 83, 9, 0.18);
+    }}
+    .button.primary:hover {{ background: var(--amber-strong); }}
+    .button.secondary {{
+      background: rgba(255, 247, 237, 0.12);
+      border-color: rgba(255, 247, 237, 0.18);
+      color: #fff7ed;
+    }}
+    .button.ghost {{
+      background: white;
+      border-color: var(--border);
+      color: var(--muted-strong);
+      box-shadow: 0 8px 18px rgba(8, 26, 54, 0.05);
+    }}
+    .button.ghost.danger-text {{
+      border-color: rgba(185, 28, 28, 0.15);
+      background: #fff5f5;
+      color: var(--danger);
+      box-shadow: none;
+    }}
+    .button.danger {{
+      background: var(--danger);
+      color: white;
+      box-shadow: 0 10px 24px rgba(185, 28, 28, 0.18);
+    }}
+    .summary-grid {{
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }}
+    .metric-card {{
+      padding: 18px 18px 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }}
+    .metric-label {{
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted-strong);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    .metric-value {{
+      margin-top: 10px;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--navy);
+    }}
+    .metric-meta {{
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }}
+    .tabs-shell {{
+      padding: 18px 20px 20px;
+      background: linear-gradient(180deg, rgba(255, 247, 237, 0.9), rgba(255, 255, 255, 0.96));
+    }}
+    .tabs-copy {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .tabs-copy p {{
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .tab-track {{
+      display: flex;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 18px;
+      background: #f3eadc;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }}
+    .tab-track::-webkit-scrollbar {{ display: none; }}
+    .tab-button {{
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      background: transparent;
+      color: var(--muted-strong);
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    }}
+    .tab-button.active {{
+      background: white;
+      color: var(--navy);
+      box-shadow: 0 10px 22px rgba(8, 26, 54, 0.08);
+    }}
+    .banner {{
+      display: none;
+      border-radius: 16px;
+      padding: 14px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }}
     .banner.visible {{ display: block; }}
-    .banner.ok {{ background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); color: #bbf7d0; }}
-    .banner.error {{ background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fecaca; }}
-    table {{ width: 100%; border-collapse: collapse; }}
-    th, td {{ text-align: left; padding: 10px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.15); vertical-align: top; }}
-    .inline {{ display: flex; gap: 8px; flex-wrap: wrap; }}
-    .spaced {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
-    .muted {{ color: var(--muted); }}
-    @media (max-width: 720px) {{
-      header {{ padding: 20px 16px; }}
-      main {{ width: calc(100vw - 16px); margin: 16px auto 48px; }}
+    .banner.ok {{
+      background: var(--success-soft);
+      border: 1px solid rgba(21, 128, 61, 0.18);
+      color: var(--success);
+    }}
+    .banner.error {{
+      background: var(--danger-soft);
+      border: 1px solid rgba(185, 28, 28, 0.16);
+      color: var(--danger);
+    }}
+    .panel-stack {{ display: grid; gap: 18px; }}
+    .panel {{
+      display: none;
+      gap: 18px;
+    }}
+    .panel.active {{
+      display: grid;
+    }}
+    .stack-grid {{
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .section-card {{
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }}
+    .section-card.accent {{
+      background: linear-gradient(180deg, rgba(255, 247, 237, 0.95), rgba(255, 255, 255, 0.98));
+    }}
+    .section-header {{
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 18px;
+    }}
+    .section-header h2,
+    .section-header h3 {{
+      color: var(--navy);
+      letter-spacing: -0.02em;
+    }}
+    .section-header p {{
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+      max-width: 64ch;
+    }}
+    .section-tag {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: var(--amber-strong);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }}
+    .field-grid {{
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .field-grid.three-up {{
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }}
+    .field.span-2 {{
+      grid-column: span 2;
+    }}
+    .field label {{
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted-strong);
+      font-size: 13px;
+      font-weight: 700;
+    }}
+    .hint {{
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }}
+    .muted {{
+      color: var(--muted);
+    }}
+    input, select, textarea {{
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 11px 13px;
+      background: white;
+      color: var(--text);
+      font: inherit;
+      outline: none;
+      transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }}
+    input:focus, select:focus, textarea:focus {{
+      border-color: var(--amber);
+      box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.12);
+    }}
+    select[multiple] {{
+      min-height: 132px;
+      padding-block: 8px;
+    }}
+    textarea {{ min-height: 110px; resize: vertical; }}
+    .mono {{ font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }}
+    .table-wrap {{
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--panel-soft);
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      text-align: left;
+      vertical-align: top;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }}
+    thead th {{
+      background: rgba(255, 247, 237, 0.88);
+      color: var(--muted-strong);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }}
+    tbody tr:last-child td {{ border-bottom: 0; }}
+    .table-cell-stack {{
+      display: grid;
+      gap: 12px;
+    }}
+    .empty-row td {{
+      padding: 18px 16px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.85);
+    }}
+    .status-pill {{
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }}
+    .status-pill.ok {{
+      background: var(--success-soft);
+      color: var(--success);
+    }}
+    .status-pill.off {{
+      background: #f3f4f6;
+      color: var(--muted-strong);
+    }}
+    .overview-list {{
+      display: grid;
+      gap: 12px;
+    }}
+    .detail-row {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted-strong);
+      font-size: 14px;
+    }}
+    .detail-row:last-child {{ border-bottom: 0; padding-bottom: 0; }}
+    .detail-row strong {{
+      color: var(--navy);
+      text-align: right;
+      font-size: 14px;
+    }}
+    .list-note {{
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }}
+    @media (max-width: 1080px) {{
+      .summary-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .stack-grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 860px) {{
+      .hero {{
+        grid-template-columns: 1fr;
+        padding: 22px;
+      }}
+      .hero-actions {{
+        justify-content: flex-start;
+      }}
+      .field-grid,
+      .field-grid.three-up {{
+        grid-template-columns: 1fr;
+      }}
+      .field.span-2 {{ grid-column: span 1; }}
+      table, thead, tbody, tr, td {{
+        display: block;
+      }}
+      thead {{
+        display: none;
+      }}
+      .table-wrap {{
+        padding: 12px;
+      }}
+      tbody {{
+        display: grid;
+        gap: 12px;
+      }}
+      tbody tr {{
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: white;
+        overflow: hidden;
+      }}
+      tbody td {{
+        border-bottom: 1px solid var(--border);
+        padding: 12px 14px;
+      }}
+      tbody td:last-child {{
+        border-bottom: 0;
+      }}
+      tbody td[data-label]::before {{
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }}
+      .empty-row td::before {{
+        display: none;
+      }}
+    }}
+    @media (max-width: 640px) {{
+      .shell {{
+        width: calc(100vw - 16px);
+        margin: 16px auto 48px;
+      }}
+      .summary-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .metric-card,
+      .section-card,
+      .tabs-shell {{
+        border-radius: 20px;
+      }}
+      .hero h1 {{
+        font-size: 1.85rem;
+      }}
     }}
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>Primo Dashboard</h1>
-      <p>{safe_guild_name} · signed in as {safe_username}</p>
-    </div>
-    <div class="toolbar">
-      <a href="/dashboard/guilds"><button type="button" class="secondary">Switch Guild</button></a>
-      <form method="post" action="/dashboard/logout"><button type="submit" class="danger">Log Out</button></form>
-    </div>
-  </header>
-  <main>
-    <div id="banner" class="banner"></div>
-    <section class="card">
-      <div class="spaced">
-        <div>
-          <h2>Orders Reminders</h2>
-          <p>Schedule, channel routing, and message copy.</p>
+  <div class="shell">
+    <header class="hero shell-card">
+      <div>
+        <div class="eyebrow">Primo Control Center</div>
+        <h1>Primo Dashboard</h1>
+        <p>{safe_guild_name} stays in sync here. Update schedules, routing, Meta relays, and sales accounts without touching slash commands.</p>
+        <div class="hero-chips">
+          <span class="hero-chip">{safe_guild_name}</span>
+          <span class="hero-chip">Signed in as {safe_username}</span>
+          <span class="hero-chip">Discord-authenticated settings</span>
         </div>
-        <button type="button" onclick="saveOrdersReminders()">Save Orders Reminders</button>
       </div>
-      <div class="grid">
-        <div class="row"><label>Enabled</label><select id="orders-enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-        <div class="row"><label>Time</label><input id="orders-time" placeholder="08:00"></div>
-        <div class="row"><label>Timezone</label><input id="orders-timezone" placeholder="Asia/Manila"></div>
-        <div class="row"><label>Tone</label><select id="orders-tone"><option value="casual">casual</option><option value="formal">formal</option></select></div>
+      <div class="hero-actions">
+        <a href="/dashboard/guilds" class="button secondary">Switch Guild</a>
+        <form method="post" action="/dashboard/logout" class="inline-form">
+          <button type="submit" class="button danger">Log Out</button>
+        </form>
       </div>
-      <div class="row"><label>Signature</label><input id="orders-signature"></div>
-      <div class="spaced"><h3>Routes</h3><button type="button" class="secondary" onclick="addOrdersRoute()">Add Route</button></div>
-      <table><thead><tr><th>Forum</th><th>Target Channel</th><th>Role</th><th></th></tr></thead><tbody id="orders-routes"></tbody></table>
+    </header>
+
+    <section class="summary-grid">
+      <article class="metric-card">
+        <p class="metric-label">Orders</p>
+        <p class="metric-value" id="summary-orders-value">0 routes</p>
+        <div class="metric-meta" id="summary-orders-meta"></div>
+      </article>
+      <article class="metric-card">
+        <p class="metric-label">Sales</p>
+        <p class="metric-value" id="summary-sales-value">0 accounts</p>
+        <div class="metric-meta" id="summary-sales-meta"></div>
+      </article>
+      <article class="metric-card">
+        <p class="metric-label">Mentions</p>
+        <p class="metric-value" id="summary-mentions-value">0 mappings</p>
+        <div class="metric-meta" id="summary-mentions-meta"></div>
+      </article>
+      <article class="metric-card">
+        <p class="metric-label">Meta</p>
+        <p class="metric-value" id="summary-meta-value">Not configured</p>
+        <div class="metric-meta" id="summary-meta-meta"></div>
+      </article>
     </section>
 
-    <section class="card">
-      <div class="spaced">
+    <section class="shell-card tabs-shell">
+      <div class="tabs-copy">
         <div>
-          <h2>Sales Reports</h2>
-          <p>Schedule, delivery targets, and report copy.</p>
+          <div class="section-tag">Dashboard Areas</div>
+          <h2>Settings that match the Recipe Tracker layout</h2>
+          <p>Use the tabs to focus on one operational area at a time. Each panel saves independently.</p>
         </div>
-        <button type="button" onclick="saveSalesSettings()">Save Sales Settings</button>
       </div>
-      <div class="grid">
-        <div class="row"><label>Enabled</label><select id="sales-enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-        <div class="row"><label>Timezone</label><input id="sales-timezone" placeholder="Asia/Manila"></div>
-        <div class="row"><label>Sales Update Times</label><input id="sales-times" placeholder="09:00,12:00,15:00"></div>
-        <div class="row"><label>Default Target</label><select id="sales-target"></select></div>
-        <div class="row"><label>Overview Time</label><input id="sales-overview-time" placeholder="21:00"></div>
-        <div class="row"><label>Overview Target</label><select id="sales-overview-target"></select></div>
-        <div class="row"><label>Tone</label><select id="sales-tone"><option value="casual">casual</option><option value="formal">formal</option></select></div>
-      </div>
-      <div class="row"><label>Signature</label><input id="sales-signature"></div>
-    </section>
-
-    <section class="card">
-      <div class="spaced">
-        <div>
-          <h2>Sales Accounts</h2>
-          <p>UTAK and Loyverse credentials. Leave password/token blank to keep the existing secret.</p>
-        </div>
-        <button type="button" onclick="saveSalesAccounts()">Save Sales Accounts</button>
-      </div>
-      <div class="toolbar"><button type="button" class="secondary" onclick="addSalesAccount()">Add Account</button></div>
-      <table><thead><tr><th>Identity</th><th>Connection</th><th>Secrets</th><th></th></tr></thead><tbody id="sales-accounts"></tbody></table>
-    </section>
-
-    <section class="card">
-      <div class="spaced">
-        <div>
-          <h2>Forum Auto-Mentions</h2>
-          <p>Ping selected roles when a user creates a new order thread.</p>
-        </div>
-        <button type="button" onclick="saveForumAutoMentions()">Save Auto-Mentions</button>
-      </div>
-      <div class="toolbar"><button type="button" class="secondary" onclick="addForumTarget()">Add Mapping</button></div>
-      <table><thead><tr><th>Forum</th><th>Roles</th><th></th></tr></thead><tbody id="forum-targets"></tbody></table>
-    </section>
-
-    <section class="card">
-      <div class="spaced">
-        <div>
-          <h2>Meta Unread Digest</h2>
-          <p>Unread message polling and digest delivery.</p>
-        </div>
-        <button type="button" onclick="saveMetaUnread()">Save Meta Unread</button>
-      </div>
-      <div class="grid">
-        <div class="row"><label>Enabled</label><select id="meta-unread-enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-        <div class="row"><label>Interval Minutes</label><input id="meta-unread-interval" type="number" min="5" max="60"></div>
-        <div class="row"><label>Target</label><select id="meta-unread-target"></select></div>
+      <div class="tab-track">
+        <button type="button" class="tab-button active" data-panel-button="overview" onclick="setActivePanel('overview')">Overview</button>
+        <button type="button" class="tab-button" data-panel-button="orders" onclick="setActivePanel('orders')">Orders</button>
+        <button type="button" class="tab-button" data-panel-button="sales" onclick="setActivePanel('sales')">Sales</button>
+        <button type="button" class="tab-button" data-panel-button="mentions" onclick="setActivePanel('mentions')">Auto-Mentions</button>
+        <button type="button" class="tab-button" data-panel-button="meta" onclick="setActivePanel('meta')">Meta</button>
       </div>
     </section>
 
-    <section class="card">
-      <div class="spaced">
-        <div>
-          <h2>Meta Webhook Relay</h2>
-          <p>Channel or forum destination for inbound Messenger and Instagram webhook posts.</p>
-        </div>
-        <button type="button" onclick="saveMetaWebhook()">Save Meta Webhook</button>
-      </div>
-      <div class="row"><label>Target</label><select id="meta-webhook-target"></select></div>
-    </section>
-  </main>
+    <div id="banner" class="banner" aria-live="polite"></div>
+
+    <main class="panel-stack">
+      <section class="panel active" data-panel="overview">
+        <section class="section-card accent">
+          <div class="section-header">
+            <div>
+              <div class="section-tag">Overview</div>
+              <h2>Quick health check</h2>
+              <p>Review channel inventory, current routing, and where scheduled automation is pointed before you make changes.</p>
+            </div>
+          </div>
+          <div class="stack-grid">
+            <div class="section-card">
+              <h3>Available Discord resources</h3>
+              <div class="overview-list">
+                <div class="detail-row"><span>Text channels</span><strong id="resource-text-count">0</strong></div>
+                <div class="detail-row"><span>Forum channels</span><strong id="resource-forum-count">0</strong></div>
+                <div class="detail-row"><span>Delivery targets</span><strong id="resource-delivery-count">0</strong></div>
+                <div class="detail-row"><span>Assignable roles</span><strong id="resource-role-count">0</strong></div>
+              </div>
+              <p class="list-note">The target lists below are built from these guild resources. Forum routes remain limited to forums under the Orders category.</p>
+            </div>
+            <div class="section-card">
+              <h3>Current destinations</h3>
+              <div class="overview-list">
+                <div class="detail-row"><span>Sales default target</span><strong id="resource-sales-target">Not set</strong></div>
+                <div class="detail-row"><span>Sales overview target</span><strong id="resource-sales-overview-target">Not set</strong></div>
+                <div class="detail-row"><span>Meta unread target</span><strong id="resource-meta-unread-target">Not set</strong></div>
+                <div class="detail-row"><span>Meta webhook target</span><strong id="resource-meta-webhook-target">Not set</strong></div>
+              </div>
+              <p class="list-note">Blank password and token fields keep existing saved secrets. Empty targets remain disabled until you save a valid channel.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel" data-panel="orders">
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <div class="section-tag">Orders</div>
+              <h2>Orders reminders</h2>
+              <p>Configure the daily reminder schedule, message tone, and signature for branch order follow-ups.</p>
+            </div>
+            <button type="button" class="button primary" onclick="saveOrdersReminders()">Save Orders Reminders</button>
+          </div>
+          <div class="field-grid three-up">
+            <div class="field">
+              <label for="orders-enabled">Status</label>
+              <select id="orders-enabled">
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="orders-time">Reminder time</label>
+              <input id="orders-time" type="time" class="mono" placeholder="08:00">
+            </div>
+            <div class="field">
+              <label for="orders-timezone">Timezone</label>
+              <input id="orders-timezone" class="mono" placeholder="Asia/Manila">
+            </div>
+            <div class="field">
+              <label for="orders-tone">Message tone</label>
+              <select id="orders-tone">
+                <option value="casual">Casual</option>
+                <option value="formal">Formal</option>
+              </select>
+            </div>
+            <div class="field span-2">
+              <label for="orders-signature">Signature</label>
+              <input id="orders-signature" placeholder="Thanks, Primo">
+              <p class="hint">Shown at the end of the generated reminder message.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <h3>Reminder routes</h3>
+              <p>Map each Orders forum to the text channel and role that should receive the reminder. Each forum can only appear once.</p>
+            </div>
+            <button type="button" class="button ghost" onclick="addOrdersRoute()">Add Route</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Forum</th>
+                  <th>Target Channel</th>
+                  <th>Mention Role</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="orders-routes"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel" data-panel="sales">
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <div class="section-tag">Sales</div>
+              <h2>Sales report settings</h2>
+              <p>Choose when sales updates run, where they post, and how the report copy should sound.</p>
+            </div>
+            <button type="button" class="button primary" onclick="saveSalesSettings()">Save Sales Settings</button>
+          </div>
+          <div class="field-grid three-up">
+            <div class="field">
+              <label for="sales-enabled">Status</label>
+              <select id="sales-enabled">
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="sales-timezone">Timezone</label>
+              <input id="sales-timezone" class="mono" placeholder="Asia/Manila">
+            </div>
+            <div class="field">
+              <label for="sales-times">Update times</label>
+              <input id="sales-times" class="mono" placeholder="09:00,12:00,15:00">
+              <p class="hint">Use comma-separated `HH:MM` values.</p>
+            </div>
+            <div class="field">
+              <label for="sales-target">Default target</label>
+              <select id="sales-target"></select>
+            </div>
+            <div class="field">
+              <label for="sales-overview-time">Overview time</label>
+              <input id="sales-overview-time" type="time" class="mono" placeholder="21:00">
+            </div>
+            <div class="field">
+              <label for="sales-overview-target">Overview target</label>
+              <select id="sales-overview-target"></select>
+            </div>
+            <div class="field">
+              <label for="sales-tone">Message tone</label>
+              <select id="sales-tone">
+                <option value="casual">Casual</option>
+                <option value="formal">Formal</option>
+              </select>
+            </div>
+            <div class="field span-2">
+              <label for="sales-signature">Signature</label>
+              <input id="sales-signature" placeholder="Thanks, Primo">
+            </div>
+          </div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <h3>Sales accounts</h3>
+              <p>Store UTAK and Loyverse account details here. Leaving password or token blank preserves the current saved secret.</p>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" class="button ghost" onclick="addSalesAccount()">Add Account</button>
+              <button type="button" class="button primary" onclick="saveSalesAccounts()">Save Sales Accounts</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Identity</th>
+                  <th>Connection</th>
+                  <th>Secrets</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="sales-accounts"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel" data-panel="mentions">
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <div class="section-tag">Auto-Mentions</div>
+              <h2>Forum auto-mentions</h2>
+              <p>Pick which roles get pinged when a new thread is created in a selected Orders forum.</p>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button type="button" class="button ghost" onclick="addForumTarget()">Add Mapping</button>
+              <button type="button" class="button primary" onclick="saveForumAutoMentions()">Save Auto-Mentions</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Forum</th>
+                  <th>Roles</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="forum-targets"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel" data-panel="meta">
+        <section class="stack-grid">
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <div class="section-tag">Meta</div>
+                <h2>Unread digest</h2>
+                <p>Set the polling interval and where unread Messenger and Instagram summaries should land in Discord.</p>
+              </div>
+              <button type="button" class="button primary" onclick="saveMetaUnread()">Save Meta Unread</button>
+            </div>
+            <div class="field-grid">
+              <div class="field">
+                <label for="meta-unread-enabled">Status</label>
+                <select id="meta-unread-enabled">
+                  <option value="true">Enabled</option>
+                  <option value="false">Disabled</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="meta-unread-interval">Interval minutes</label>
+                <input id="meta-unread-interval" type="number" min="5" max="60" class="mono">
+              </div>
+              <div class="field span-2">
+                <label for="meta-unread-target">Digest target</label>
+                <select id="meta-unread-target"></select>
+              </div>
+            </div>
+          </section>
+
+          <section class="section-card">
+            <div class="section-header">
+              <div>
+                <div class="section-tag">Meta</div>
+                <h2>Webhook relay</h2>
+                <p>Choose the channel or forum destination for inbound Messenger and Instagram webhook posts.</p>
+              </div>
+              <button type="button" class="button primary" onclick="saveMetaWebhook()">Save Meta Webhook</button>
+            </div>
+            <div class="field-grid">
+              <div class="field span-2">
+                <label for="meta-webhook-target">Webhook target</label>
+                <select id="meta-webhook-target"></select>
+              </div>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+  </div>
 
   <script>
+    const PANEL_STORAGE_KEY = "primoDashboardActivePanel";
     const guildId = {json.dumps(guild_id)};
     const apiBase = `/api/dashboard/guilds/${{guildId}}`;
-    const state = {{ bootstrap: null }};
+    const state = {{ bootstrap: null, data: {{}}, panelReady: false }};
 
     function showBanner(kind, message) {{
       const banner = document.getElementById("banner");
@@ -1030,9 +1722,36 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
       return data;
     }}
 
-    function buildOptions(items, includeBlank = true) {{
+    function setActivePanel(panelId) {{
+      document.querySelectorAll("[data-panel]").forEach((panel) => {{
+        panel.classList.toggle("active", panel.dataset.panel === panelId);
+      }});
+      document.querySelectorAll("[data-panel-button]").forEach((button) => {{
+        button.classList.toggle("active", button.dataset.panelButton === panelId);
+      }});
+      try {{
+        localStorage.setItem(PANEL_STORAGE_KEY, panelId);
+      }} catch {{
+        // Ignore storage errors.
+      }}
+    }}
+
+    function restoreActivePanel() {{
+      try {{
+        const stored = localStorage.getItem(PANEL_STORAGE_KEY);
+        if (stored && document.querySelector('[data-panel="' + stored + '"]')) {{
+          setActivePanel(stored);
+          return;
+        }}
+      }} catch {{
+        // Ignore storage errors.
+      }}
+      setActivePanel("overview");
+    }}
+
+    function buildOptions(items, includeBlank = true, blankLabel = "Not set") {{
       const html = [];
-      if (includeBlank) html.push(`<option value="">Not set</option>`);
+      if (includeBlank) html.push(`<option value="">${{escapeHtml(blankLabel)}}</option>`);
       for (const item of items) {{
         html.push(`<option value="${{item.id}}">${{escapeHtml(item.name)}}</option>`);
       }}
@@ -1053,15 +1772,102 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
       select.value = value || "";
     }}
 
+    function lookupName(items, id, fallback = "Not set") {{
+      if (!id) return fallback;
+      return items.find((item) => item.id === id)?.name || fallback;
+    }}
+
+    function statusBadge(enabled, onLabel = "Enabled", offLabel = "Disabled") {{
+      return `<span class="status-pill ${{enabled ? "ok" : "off"}}">${{enabled ? onLabel : offLabel}}</span>`;
+    }}
+
+    function syncEmptyState(tbodyId, columnCount, message) {{
+      const tbody = document.getElementById(tbodyId);
+      const dataRows = Array.from(tbody.children).filter((row) => !row.classList.contains("empty-row"));
+      const existing = tbody.querySelector(".empty-row");
+      if (dataRows.length === 0) {{
+        if (!existing) {{
+          tbody.insertAdjacentHTML("beforeend", `<tr class="empty-row"><td colspan="${{columnCount}}">${{escapeHtml(message)}}</td></tr>`);
+        }}
+      }} else if (existing) {{
+        existing.remove();
+      }}
+    }}
+
+    function removeTableRow(button, tbodyId, columnCount, message) {{
+      button.closest("tr")?.remove();
+      syncEmptyState(tbodyId, columnCount, message);
+      updateOverview();
+    }}
+
+    function updateOverview() {{
+      if (!state.bootstrap) return;
+
+      const orders = state.data.orders || {{ enabled: false, time: "", timezone: "", routes: [] }};
+      const sales = state.data.sales || {{ enabled: false, times: [], targetChannelId: "", overviewTargetChannelId: "" }};
+      const accounts = state.data.accounts?.accounts || [];
+      const forumTargets = state.data.forumTargets?.targets || [];
+      const metaUnread = state.data.metaUnread || {{ enabled: false, intervalMinutes: 0, targetChannelId: "" }};
+      const metaWebhook = state.data.metaWebhook || {{ targetChannelId: "" }};
+
+      const ordersCount = orders.routes.length;
+      const salesCount = accounts.length;
+      const mentionRoleCount = forumTargets.reduce((sum, item) => sum + (item.roleIds || []).length, 0);
+
+      document.getElementById("summary-orders-value").textContent = `${{ordersCount}} route${{ordersCount === 1 ? "" : "s"}}`;
+      document.getElementById("summary-orders-meta").innerHTML =
+        `${{statusBadge(orders.enabled)}}<span>${{escapeHtml(orders.time || "--:--")}} · ${{escapeHtml(orders.timezone || "Timezone not set")}}</span>`;
+
+      document.getElementById("summary-sales-value").textContent = `${{salesCount}} account${{salesCount === 1 ? "" : "s"}}`;
+      document.getElementById("summary-sales-meta").innerHTML =
+        `${{statusBadge(sales.enabled)}}<span>${{(sales.times || []).length}} update time${{(sales.times || []).length === 1 ? "" : "s"}}</span>`;
+
+      document.getElementById("summary-mentions-value").textContent = `${{forumTargets.length}} mapping${{forumTargets.length === 1 ? "" : "s"}}`;
+      document.getElementById("summary-mentions-meta").innerHTML =
+        `<span>${{mentionRoleCount}} role mention${{mentionRoleCount === 1 ? "" : "s"}} configured</span>`;
+
+      document.getElementById("summary-meta-value").textContent = metaUnread.enabled
+        ? `${{metaUnread.intervalMinutes}} min digest`
+        : (metaWebhook.targetChannelId ? "Webhook only" : "Not configured");
+      document.getElementById("summary-meta-meta").innerHTML =
+        `${{statusBadge(metaUnread.enabled, "Digest on", "Digest off")}}<span>Webhook: ${{escapeHtml(lookupName(state.bootstrap.channels.delivery, metaWebhook.targetChannelId, "Not set"))}}</span>`;
+
+      document.getElementById("resource-text-count").textContent = String(state.bootstrap.channels.text.length);
+      document.getElementById("resource-forum-count").textContent = String(state.bootstrap.channels.forums.length);
+      document.getElementById("resource-delivery-count").textContent = String(state.bootstrap.channels.delivery.length);
+      document.getElementById("resource-role-count").textContent = String(state.bootstrap.roles.length);
+
+      document.getElementById("resource-sales-target").textContent = lookupName(
+        state.bootstrap.channels.delivery,
+        sales.targetChannelId,
+        "Not set"
+      );
+      document.getElementById("resource-sales-overview-target").textContent = lookupName(
+        state.bootstrap.channels.delivery,
+        sales.overviewTargetChannelId || sales.targetChannelId,
+        "Not set"
+      );
+      document.getElementById("resource-meta-unread-target").textContent = lookupName(
+        state.bootstrap.channels.delivery,
+        metaUnread.targetChannelId,
+        "Not set"
+      );
+      document.getElementById("resource-meta-webhook-target").textContent = lookupName(
+        state.bootstrap.channels.delivery,
+        metaWebhook.targetChannelId,
+        "Not set"
+      );
+    }}
+
     function renderOrdersRoute(route = {{ forumId: "", targetTextChannelId: "", mentionRoleId: "" }}) {{
-      const forums = buildOptions(state.bootstrap.channels.forums);
-      const textChannels = buildOptions(state.bootstrap.channels.text);
-      const roles = buildOptions(state.bootstrap.roles, false);
+      const forums = buildOptions(state.bootstrap.channels.forums, true, "Choose a forum");
+      const textChannels = buildOptions(state.bootstrap.channels.text, true, "Choose a text channel");
+      const roles = buildOptions(state.bootstrap.roles, true, "Choose a role");
       return `<tr>
-        <td><select class="orders-forum">${{forums}}</select></td>
-        <td><select class="orders-target">${{textChannels}}</select></td>
-        <td><select class="orders-role">${{roles}}</select></td>
-        <td><button type="button" class="danger" onclick="this.closest('tr').remove()">Remove</button></td>
+        <td data-label="Forum"><select class="orders-forum">${{forums}}</select></td>
+        <td data-label="Target Channel"><select class="orders-target">${{textChannels}}</select></td>
+        <td data-label="Mention Role"><select class="orders-role">${{roles}}</select></td>
+        <td data-label="Actions"><button type="button" class="button ghost danger-text" onclick="removeTableRow(this, 'orders-routes', 4, 'No routing rules yet. Add the forums that should post reminders.')">Remove</button></td>
       </tr>`;
     }}
 
@@ -1072,26 +1878,34 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
       row.querySelector(".orders-forum").value = route?.forumId || "";
       row.querySelector(".orders-target").value = route?.targetTextChannelId || "";
       row.querySelector(".orders-role").value = route?.mentionRoleId || "";
+      syncEmptyState("orders-routes", 4, "No routing rules yet. Add the forums that should post reminders.");
+      updateOverview();
     }}
 
     function renderSalesAccount(account = {{}}) {{
       return `<tr>
-        <td>
-          <div class="row"><label>ID</label><input class="account-id" value="${{escapeHtml(account.id || "")}}"></div>
-          <div class="row"><label>Name</label><input class="account-name" value="${{escapeHtml(account.name || "")}}"></div>
-          <div class="row"><label>Platform</label><select class="account-platform"><option value="UTAK">UTAK</option><option value="LOYVERSE">LOYVERSE</option></select></div>
-          <div class="row"><label>Enabled</label><select class="account-enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+        <td data-label="Identity">
+          <div class="table-cell-stack">
+            <div class="field"><label>ID</label><input class="account-id" value="${{escapeHtml(account.id || "")}}"></div>
+            <div class="field"><label>Name</label><input class="account-name" value="${{escapeHtml(account.name || "")}}"></div>
+            <div class="field"><label>Platform</label><select class="account-platform"><option value="UTAK">UTAK</option><option value="LOYVERSE">LOYVERSE</option></select></div>
+            <div class="field"><label>Status</label><select class="account-enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+          </div>
         </td>
-        <td>
-          <div class="row"><label>Username</label><input class="account-username" value="${{escapeHtml(account.username || "")}}"></div>
-          <div class="row"><label>Base URL</label><input class="account-base-url" value="${{escapeHtml(account.baseUrl || "")}}"></div>
-          <div class="row"><label>Sales Page URL</label><input class="account-sales-url" value="${{escapeHtml(account.salesPageUrl || "")}}"></div>
+        <td data-label="Connection">
+          <div class="table-cell-stack">
+            <div class="field"><label>Username</label><input class="account-username" value="${{escapeHtml(account.username || "")}}"></div>
+            <div class="field"><label>Base URL</label><input class="account-base-url" value="${{escapeHtml(account.baseUrl || "")}}"></div>
+            <div class="field"><label>Sales Page URL</label><input class="account-sales-url" value="${{escapeHtml(account.salesPageUrl || "")}}"></div>
+          </div>
         </td>
-        <td>
-          <div class="row"><label>Password</label><input class="account-password" type="password" placeholder="${{account.hasPassword ? "configured" : ""}}"></div>
-          <div class="row"><label>Token</label><input class="account-token" type="password" placeholder="${{account.hasToken ? "configured" : ""}}"></div>
+        <td data-label="Secrets">
+          <div class="table-cell-stack">
+            <div class="field"><label>Password</label><input class="account-password" type="password" placeholder="${{account.hasPassword ? "Configured" : ""}}"></div>
+            <div class="field"><label>Token</label><input class="account-token" type="password" placeholder="${{account.hasToken ? "Configured" : ""}}"></div>
+          </div>
         </td>
-        <td><button type="button" class="danger" onclick="this.closest('tr').remove()">Remove</button></td>
+        <td data-label="Actions"><button type="button" class="button ghost danger-text" onclick="removeTableRow(this, 'sales-accounts', 4, 'No sales accounts added yet. Add UTAK or Loyverse credentials to enable broadcasts.')">Remove</button></td>
       </tr>`;
     }}
 
@@ -1101,13 +1915,15 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
       const row = tbody.lastElementChild;
       row.querySelector(".account-platform").value = account?.platform || "UTAK";
       row.querySelector(".account-enabled").value = String(account?.enabled ?? true);
+      syncEmptyState("sales-accounts", 4, "No sales accounts added yet. Add UTAK or Loyverse credentials to enable broadcasts.");
+      updateOverview();
     }}
 
     function renderForumTarget(target = {{ forumId: "", roleIds: [] }}) {{
       return `<tr>
-        <td><select class="forum-target-forum">${{buildOptions(state.bootstrap.channels.forums)}}</select></td>
-        <td><select class="forum-target-roles" multiple size="4">${{state.bootstrap.roles.map((item) => `<option value="${{item.id}}">${{escapeHtml(item.name)}}</option>`).join("")}}</select></td>
-        <td><button type="button" class="danger" onclick="this.closest('tr').remove()">Remove</button></td>
+        <td data-label="Forum"><select class="forum-target-forum">${{buildOptions(state.bootstrap.channels.forums, true, "Choose a forum")}}</select></td>
+        <td data-label="Roles"><select class="forum-target-roles" multiple size="5">${{state.bootstrap.roles.map((item) => `<option value="${{item.id}}">${{escapeHtml(item.name)}}</option>`).join("")}}</select></td>
+        <td data-label="Actions"><button type="button" class="button ghost danger-text" onclick="removeTableRow(this, 'forum-targets', 3, 'No forum auto-mention mappings yet.')">Remove</button></td>
       </tr>`;
     }}
 
@@ -1120,6 +1936,8 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
       for (const option of roles.options) {{
         option.selected = (target?.roleIds || []).includes(option.value);
       }}
+      syncEmptyState("forum-targets", 3, "No forum auto-mention mappings yet.");
+      updateOverview();
     }}
 
     async function loadDashboard() {{
@@ -1137,6 +1955,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
         apiFetch("/meta-unread"),
         apiFetch("/meta-webhook"),
       ]);
+      state.data = {{ orders, sales, accounts, forumTargets, metaUnread, metaWebhook }};
 
       document.getElementById("orders-enabled").value = String(orders.enabled);
       document.getElementById("orders-time").value = orders.time;
@@ -1145,6 +1964,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
       document.getElementById("orders-signature").value = orders.signature;
       document.getElementById("orders-routes").innerHTML = "";
       for (const route of orders.routes) addOrdersRoute(route);
+      syncEmptyState("orders-routes", 4, "No routing rules yet. Add the forums that should post reminders.");
 
       document.getElementById("sales-enabled").value = String(sales.enabled);
       document.getElementById("sales-timezone").value = sales.timezone;
@@ -1157,15 +1977,23 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
 
       document.getElementById("sales-accounts").innerHTML = "";
       for (const account of accounts.accounts) addSalesAccount(account);
+      syncEmptyState("sales-accounts", 4, "No sales accounts added yet. Add UTAK or Loyverse credentials to enable broadcasts.");
 
       document.getElementById("forum-targets").innerHTML = "";
       for (const target of forumTargets.targets) addForumTarget(target);
+      syncEmptyState("forum-targets", 3, "No forum auto-mention mappings yet.");
 
       document.getElementById("meta-unread-enabled").value = String(metaUnread.enabled);
       document.getElementById("meta-unread-interval").value = metaUnread.intervalMinutes;
       document.getElementById("meta-unread-target").value = metaUnread.targetChannelId || "";
 
       document.getElementById("meta-webhook-target").value = metaWebhook.targetChannelId || "";
+
+      updateOverview();
+      if (!state.panelReady) {{
+        restoreActivePanel();
+        state.panelReady = true;
+      }}
     }}
 
     async function saveOrdersReminders() {{
@@ -1173,7 +2001,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
         forumId: row.querySelector(".orders-forum").value,
         targetTextChannelId: row.querySelector(".orders-target").value,
         mentionRoleId: row.querySelector(".orders-role").value,
-      }}));
+      }})).filter((item) => item.forumId || item.targetTextChannelId || item.mentionRoleId);
       await apiFetch("/orders-reminders", {{
         method: "PUT",
         body: JSON.stringify({{
@@ -1185,6 +2013,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
           signature: document.getElementById("orders-signature").value,
         }}),
       }});
+      await loadDashboard();
       showBanner("ok", "Orders reminders updated.");
     }}
 
@@ -1202,6 +2031,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
           signature: document.getElementById("sales-signature").value,
         }}),
       }});
+      await loadDashboard();
       showBanner("ok", "Sales settings updated.");
     }}
 
@@ -1234,6 +2064,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
         method: "PUT",
         body: JSON.stringify({{ targets }}),
       }});
+      await loadDashboard();
       showBanner("ok", "Forum auto-mentions updated.");
     }}
 
@@ -1246,6 +2077,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
           targetChannelId: document.getElementById("meta-unread-target").value,
         }}),
       }});
+      await loadDashboard();
       showBanner("ok", "Meta unread settings updated.");
     }}
 
@@ -1256,6 +2088,7 @@ def render_guild_dashboard_page(guild_id: str, guild_name: str, username: str) -
           targetChannelId: document.getElementById("meta-webhook-target").value,
         }}),
       }});
+      await loadDashboard();
       showBanner("ok", "Meta webhook target updated.");
     }}
 
