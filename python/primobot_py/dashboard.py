@@ -9,8 +9,10 @@ import hmac
 import html
 import json
 import secrets
+import time
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -29,6 +31,8 @@ DISCORD_API_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "PrimoBotDashboard/0.1 (+https://discord.com/developers/applications)",
 }
+DISCORD_RATE_LIMIT_MAX_RETRIES = 3
+DISCORD_RATE_LIMIT_FALLBACK_DELAY_SECONDS = 1.0
 
 
 @dataclass(slots=True)
@@ -296,31 +300,65 @@ class DiscordOAuthClient:
         return guilds
 
     def _post_form(self, path: str, payload: dict[str, str]) -> dict[str, Any]:
-        body = urlencode(payload).encode("utf-8")
-        request = Request(
-            DISCORD_API_BASE_URL + path,
-            data=body,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                **DISCORD_API_HEADERS,
-            },
-            method="POST",
-        )
-        with urlopen(request, timeout=15) as response:
-            parsed = json.loads(response.read().decode("utf-8"))
-            return parsed if isinstance(parsed, dict) else {}
+        def build_request() -> Request:
+            body = urlencode(payload).encode("utf-8")
+            return Request(
+                DISCORD_API_BASE_URL + path,
+                data=body,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    **DISCORD_API_HEADERS,
+                },
+                method="POST",
+            )
+
+        return self._perform_json_request(build_request)
 
     def _get_json(self, path: str, access_token: str) -> Any:
-        request = Request(
-            DISCORD_API_BASE_URL + path,
-            headers={
-                "Authorization": "Bearer " + access_token,
-                **DISCORD_API_HEADERS,
-            },
-            method="GET",
-        )
-        with urlopen(request, timeout=15) as response:
-            return json.loads(response.read().decode("utf-8"))
+        def build_request() -> Request:
+            return Request(
+                DISCORD_API_BASE_URL + path,
+                headers={
+                    "Authorization": "Bearer " + access_token,
+                    **DISCORD_API_HEADERS,
+                },
+                method="GET",
+            )
+
+        return self._perform_json_request(build_request)
+
+    def _perform_json_request(self, build_request: Any) -> Any:
+        last_error: HTTPError | None = None
+        for attempt in range(DISCORD_RATE_LIMIT_MAX_RETRIES + 1):
+            request = build_request()
+            try:
+                with urlopen(request, timeout=15) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except HTTPError as ex:
+                if ex.code != 429 or attempt >= DISCORD_RATE_LIMIT_MAX_RETRIES:
+                    raise
+                last_error = ex
+                retry_delay = self._resolve_retry_delay_seconds(ex)
+                time.sleep(retry_delay)
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Discord API request failed without a response.")
+
+    def _resolve_retry_delay_seconds(self, error: HTTPError) -> float:
+        retry_after_header = error.headers.get("Retry-After", "").strip()
+        if retry_after_header:
+            try:
+                return max(float(retry_after_header), 0.25)
+            except ValueError:
+                pass
+        try:
+            payload = json.loads(error.read().decode("utf-8"))
+            retry_after = payload.get("retry_after")
+            if retry_after is not None:
+                return max(float(retry_after), 0.25)
+        except Exception:
+            pass
+        return DISCORD_RATE_LIMIT_FALLBACK_DELAY_SECONDS
 
 
 class DashboardAccessError(RuntimeError):
