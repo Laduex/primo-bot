@@ -2,6 +2,7 @@ package dev.saseq.primobot.sales;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
+import dev.saseq.primobot.util.CrossProcessClaimStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -36,6 +37,9 @@ class SalesReportSchedulerServiceTest {
     private SalesReportExecutorService executorService;
 
     @Mock
+    private CrossProcessClaimStore claimStore;
+
+    @Mock
     private Guild guild;
 
     @Test
@@ -55,6 +59,7 @@ class SalesReportSchedulerServiceTest {
 
         when(configStore.getSnapshot()).thenReturn(config);
         when(jda.getGuildById("1478671501338214410")).thenReturn(guild);
+        when(claimStore.tryClaim("sales-schedule", today + "|update:" + slot)).thenReturn(true);
         when(executorService.execute(eq(guild), any(SalesReportConfig.class), eq(null), eq(null), eq(false)))
                 .thenReturn(new SalesReportExecutorService.DispatchResult(
                         SalesReportExecutorService.DispatchStatus.SENT,
@@ -69,6 +74,7 @@ class SalesReportSchedulerServiceTest {
                 jda,
                 configStore,
                 executorService,
+                claimStore,
                 "1478671501338214410"
         );
 
@@ -103,6 +109,7 @@ class SalesReportSchedulerServiceTest {
 
         when(configStore.getSnapshot()).thenReturn(config);
         when(jda.getGuildById("1478671501338214410")).thenReturn(guild);
+        when(claimStore.tryClaim("sales-schedule", now.toLocalDate() + "|update:" + slot)).thenReturn(true);
         when(executorService.execute(eq(guild), any(SalesReportConfig.class), eq(null), eq(null), eq(false)))
                 .thenReturn(new SalesReportExecutorService.DispatchResult(
                         SalesReportExecutorService.DispatchStatus.SEND_FAILED,
@@ -117,6 +124,7 @@ class SalesReportSchedulerServiceTest {
                 jda,
                 configStore,
                 executorService,
+                claimStore,
                 "1478671501338214410"
         );
 
@@ -132,6 +140,7 @@ class SalesReportSchedulerServiceTest {
         scheduler.runSalesTick();
 
         verify(configStore, times(2)).replaceAndPersist(any(SalesReportConfig.class));
+        verify(claimStore).release("sales-schedule", now.toLocalDate() + "|update:" + slot);
         assertTrue(persistedSnapshots.get(0).getLastRunDateBySlot().containsKey("update:" + slot));
         assertFalse(persistedSnapshots.get(1).getLastRunDateBySlot().containsKey("update:" + slot));
     }
