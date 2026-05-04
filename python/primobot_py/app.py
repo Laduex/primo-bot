@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import FastAPI, Header, Query, Request, Response, status
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response, status
 
 from .bot import PrimoBot
 from .meta_webhook import MetaWebhookEventExtractor, MetaWebhookRelayService
+from .ops_alerts import OpsAlertRequest, OpsAlertService
 from .settings import Settings
 
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +22,7 @@ meta_webhook_service = MetaWebhookRelayService(
     fallback_target_channel_id=settings.meta_webhook_target_channel_id,
     app_secret=settings.meta_app_secret,
 )
+ops_alert_service = OpsAlertService(bot=bot, target_channel_id=settings.ops_alert_channel_id)
 app = FastAPI(title="primo-bot-python", version="0.1.0")
 _bot_task: asyncio.Task[None] | None = None
 
@@ -74,3 +76,17 @@ async def receive_meta_webhook(
         )
     await meta_webhook_service.relay_inbound_chat_payload(body)
     return Response(content="EVENT_RECEIVED", media_type="text/plain")
+
+
+@app.post("/ops/alerts")
+async def send_ops_alert(
+    request: OpsAlertRequest,
+    x_ops_alert_token: str | None = Header(default=None),
+) -> Response:
+    if settings.ops_alert_token and settings.ops_alert_token != (x_ops_alert_token or ""):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+
+    result = await ops_alert_service.send_alert(request)
+    if not result.sent:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.message)
+    return Response(content=result.message, media_type="text/plain")

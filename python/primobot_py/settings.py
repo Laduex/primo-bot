@@ -60,6 +60,8 @@ class Settings:
     meta_unread_default_enabled: bool
     meta_unread_default_interval_minutes: int
     meta_unread_default_target_channel_id: str
+    ops_alert_channel_id: str
+    ops_alert_token: str
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -116,4 +118,6 @@ class Settings:
             meta_unread_default_target_channel_id=_env(
                 "META_UNREAD_DEFAULT_TARGET_CHANNEL_ID"
             ),
+            ops_alert_channel_id=_env("OPS_ALERT_CHANNEL_ID"),
+            ops_alert_token=_env("OPS_ALERT_TOKEN"),
         )
