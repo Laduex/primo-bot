@@ -17,5 +17,5 @@ This folder contains the Python runtime for `primo-bot`.
 ## Run fixture export
 
 ```bash
-python3 /Users/vaughndazo/Documents/LDX/Apps/primo-bot/python/scripts/export_fixtures.py
+python3 scripts/export_fixtures.py
 ```
